@@ -1,6 +1,7 @@
 import torch
 import argparse
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+from trl import SFTTrainer
 from peft import LoraConfig, get_peft_model
 from dotenv import load_dotenv
 import os 
@@ -62,7 +63,8 @@ def main():
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         load_in_8bit=args.load_in_8bit,
-        device_map="auto"
+        device_map="auto",
+        attn_implementation="flash_attention_2"
     )
     
     # Apply LoRA for efficient fine-tuning
@@ -90,7 +92,7 @@ def main():
     )
     
     # Create trainer and train
-    trainer = Trainer(
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset,

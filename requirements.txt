@@ -11,7 +11,7 @@ tiktoken
 blobfile 
 protobuf 
 sentencepiece
-
+flash-attn
 
 #data
 sqlalchemy==2.0.38
@@ -22,4 +22,5 @@ pandas
 #general
 stockfish
 python-dotenv
-tqdm 
+tqdm
+chess 

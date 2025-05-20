@@ -97,7 +97,7 @@ def process_batch(batch_df, tokenizer):
             if row['move'] not in possible_moves:
                 continue
                 
-            # Create the input and output dictionaries
+            # Create the prompt and completion strings
             input_dict = {
                 "moveHistory": move_history,
                 "possibleMoves": possible_moves,
@@ -109,10 +109,14 @@ def process_batch(batch_df, tokenizer):
                 "reasoning": generate_reasoning(row, tokenizer)
             }
             
+            # Format as prompt and completion
+            prompt = json.dumps(input_dict)
+            completion = json.dumps(output_dict)
+            
             # Add to the dataset
             chess_data.append({
-                "input": json.dumps(input_dict),
-                "output": json.dumps(output_dict)
+                "prompt": prompt,
+                "completion": completion
             })
             
         except Exception as e:
