@@ -97,6 +97,8 @@ def main():
         model=model,
         args=training_args,
         train_dataset=dataset,
+        dataset_text_field="prompt",
+        max_seq_length=512
     )
     
     trainer.train()
