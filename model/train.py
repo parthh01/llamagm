@@ -89,7 +89,7 @@ def main():
         per_device_train_batch_size=args.per_device_train_batch_size,
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
-        dataset_text_field="prompt"
+        dataset_text_field="prompt",
     )
     
     # Create trainer and train
@@ -97,8 +97,6 @@ def main():
         model=model,
         args=training_args,
         train_dataset=dataset,
-        dataset_text_field="prompt",
-        max_seq_length=512
     )
     
     trainer.train()
