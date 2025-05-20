@@ -74,7 +74,8 @@ def generate_reasoning(row, tokenizer):
 
 def process_batch(batch_df, tokenizer):
     """Process a batch of rows from the database into the required format"""
-    chess_data = []
+    prompts = []
+    completions = []
     
     for _, row in batch_df.iterrows():
         try:
@@ -104,31 +105,32 @@ def process_batch(batch_df, tokenizer):
                 "color": get_color(board)
             }
             
-            output_dict = {
-                "move": row['move'],
-                "reasoning": generate_reasoning(row, tokenizer)
-            }
-            
-            # Format as prompt and completion
+            # Format as prompt
             prompt = json.dumps(input_dict)
-            completion = json.dumps(output_dict)
             
-            # Add to the dataset
-            chess_data.append({
-                "prompt": prompt,
-                "completion": completion
-            })
+            # Format completions as a list with move and reasoning
+            completion = [
+                row['move'],
+                generate_reasoning(row, tokenizer)
+            ]
+            
+            # Add to the lists
+            prompts.append(prompt)
+            completions.append(completion)
             
         except Exception as e:
             print(f"Error processing row: {e}")
             continue
     
-    return chess_data
+    return {"prompt": prompts, "completions": completions}
 
 def stream_dataset(engine, tokenizer, batch_size=1000):
     """Stream the dataset in batches and yield processed examples"""
     total_rows = get_total_rows(engine)
     processed_rows = 0
+    
+    all_prompts = []
+    all_completions = []
     
     with tqdm(total=total_rows, desc="Processing rows") as pbar:
         # Stream data in batches
@@ -139,20 +141,23 @@ def stream_dataset(engine, tokenizer, batch_size=1000):
                 batch_df = pd.read_sql(query, conn)
             
             # Process this batch
-            chess_data_batch = process_batch(batch_df, tokenizer)
+            batch_data = process_batch(batch_df, tokenizer)
+            
+            # Extend our lists
+            all_prompts.extend(batch_data["prompt"])
+            all_completions.extend(batch_data["completions"])
             
             # Update progress
             processed_rows += len(batch_df)
             pbar.update(len(batch_df))
-            
-            # Yield examples one by one
-            for example in chess_data_batch:
-                yield example
+    
+    return {"prompt": all_prompts, "completions": all_completions}
 
 def create_dataset(engine, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
-    """Create a Hugging Face dataset using streaming"""
-    # Create dataset using streaming to handle large data
-    dataset = Dataset.from_generator(lambda: stream_dataset(engine, tokenizer, batch_size))
+    """Create a Hugging Face dataset using the new format"""
+    # Create dataset using the new dictionary format
+    data_dict = stream_dataset(engine, tokenizer, batch_size)
+    dataset = Dataset.from_dict(data_dict)
     
     # Optionally push to Hugging Face Hub
     if push_to_hub and hub_name:
