@@ -4,3 +4,4 @@
 **/__pycache__/
 offload_folder/*
 open_llama_7b-lora-final/*
+openlm-research/*
