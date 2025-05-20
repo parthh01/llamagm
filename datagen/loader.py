@@ -108,11 +108,9 @@ def process_batch(batch_df, tokenizer):
             # Format as prompt
             prompt = json.dumps(input_dict)
             
-            # Format completions as a list with move and reasoning
-            completion = [
-                row['move'],
-                generate_reasoning(row, tokenizer)
-            ]
+            # Format completion as a string instead of a list
+            reasoning = generate_reasoning(row, tokenizer)
+            completion = f"{row['move']} {reasoning}"
             
             # Add to the lists
             prompts.append(prompt)
@@ -122,7 +120,7 @@ def process_batch(batch_df, tokenizer):
             print(f"Error processing row: {e}")
             continue
     
-    return {"prompt": prompts, "completions": completions}
+    return {"prompt": prompts, "completion": completions}
 
 def stream_dataset(engine, tokenizer, batch_size=1000):
     """Stream the dataset in batches and yield processed examples"""
@@ -145,13 +143,13 @@ def stream_dataset(engine, tokenizer, batch_size=1000):
             
             # Extend our lists
             all_prompts.extend(batch_data["prompt"])
-            all_completions.extend(batch_data["completions"])
+            all_completions.extend(batch_data["completion"])
             
             # Update progress
             processed_rows += len(batch_df)
             pbar.update(len(batch_df))
     
-    return {"prompt": all_prompts, "completions": all_completions}
+    return {"prompt": all_prompts, "completion": all_completions}
 
 def create_dataset(engine, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
     """Create a Hugging Face dataset using the new format"""
