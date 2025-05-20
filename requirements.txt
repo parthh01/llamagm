@@ -11,7 +11,8 @@ tiktoken
 blobfile 
 protobuf 
 sentencepiece
-flash-attn
+flash-attn==1.0.5
+trl 
 
 #data
 sqlalchemy==2.0.38
