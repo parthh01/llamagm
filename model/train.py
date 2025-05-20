@@ -82,14 +82,13 @@ def main():
         args.output_dir = f"./{args.model_name}-lora"
     
     # Set up training arguments
-    training_args = SFTConfig(
+    training_args = TrainingArguments(
         output_dir=args.output_dir,
         learning_rate=args.learning_rate,
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.per_device_train_batch_size,
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
-        dataset_text_field="prompt",
     )
     
     # Create trainer and train
@@ -97,6 +96,9 @@ def main():
         model=model,
         args=training_args,
         train_dataset=dataset,
+        dataset_text_field="prompt",
+        max_seq_length=512,
+        tokenizer=tokenizer,
     )
     
     trainer.train()
