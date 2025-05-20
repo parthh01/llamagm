@@ -3,7 +3,7 @@ import os
 import json 
 import torch 
 
-model_name = "gpt2"
+model_name = "./open_llama_7b-lora-final"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
 model_name,
@@ -40,7 +40,7 @@ Your reasoning must be limited to 10 words or less."""
 
 def test_chess_model(position_data):
 	# Format input with system prompt
-	prompt = f"[INST] {system_prompt}\n\n{json.dumps(position_data)} [/INST]"
+	prompt = f"[INST] {system_prompt}\n\n{json.dumps(position_data)} [/INST]" 
 	inputs = tokenizer(prompt, return_tensors="pt").to(model.device)  # Move inputs to same device as model
 	# Generate response
 	outputs = model.generate(inputs["input_ids"],

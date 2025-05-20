@@ -3,3 +3,4 @@
 .DS_Store
 **/__pycache__/
 offload_folder/*
+open_llama_7b-lora-final/*
