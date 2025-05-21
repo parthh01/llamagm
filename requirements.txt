@@ -25,3 +25,8 @@ stockfish
 python-dotenv
 tqdm
 chess 
+
+
+#eval
+matplotlib
+numpy

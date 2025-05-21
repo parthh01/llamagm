@@ -1,0 +1,86 @@
+import chess 
+import stockfish
+from abc import ABC, abstractmethod
+import os 
+import random 
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import json 
+from constants import system_prompt
+import threading
+
+#derived from https://lichess.org/forum/general-chess-discussion/what-elo-are-the-various-stockfish-levels and https://www.reddit.com/r/chess/comments/ltzzon/what_is_the_approximate_elo_rating_of_each_of_the/
+#really we are just using this for relative strength so even if these elo ratings aren't quite accurate, that it's the idential ratings used for all evals allows for relative comparisons
+stockfish_skill_elo_map = {
+    850: {"Skill Level": 3,"Threads": 2,"Depth": 1},
+    950: {"Skill Level": 6, "Threads": 2,"Depth": 2},
+    1050: {"Skill Level": 9, "Threads": 2,"Depth": 3},
+    1250: {"Skill Level": 11, "Threads": 2,"Depth": 4},
+    1700: {"Skill Level": 14, "Threads": 2,"Depth": 6},
+    1900: {"Skill Level": 17, "Threads": 1,"Depth": 8},
+    2000: {"Skill Level": 20, "Threads": 1,"Depth": 10}
+}
+
+class BasePlayer(ABC):
+    @abstractmethod
+    def get_move(self, board: chess.Board, time_left: int) -> chess.Move:
+        pass
+
+class StockfishPlayer(BasePlayer):
+    def __init__(self, params:dict):
+        self.stockfish = stockfish.Stockfish(path=os.getenv('STOCKFISH_PATH', '/usr/local/bin/stockfish'))
+        self.stockfish.set_skill_level(params["Skill Level"])
+        self.stockfish.update_engine_parameters({"Threads": params["Threads"]})
+        self.stockfish.set_depth(params["Depth"])
+        self.lock = threading.Lock()
+
+    def get_move(self, board: chess.Board, time_left: int) -> chess.Move:
+        self.stockfish.set_fen_position(board.fen())
+        move = self.stockfish.get_best_move()
+        return chess.Move.from_uci(move)
+        
+    def __del__(self):
+        # Clean up Stockfish process when the player is destroyed
+        if hasattr(self, 'stockfish'):
+            try:
+                self.stockfish.__del__()
+            except Exception as e:
+                print(f"Error cleaning up Stockfish: {e}")
+
+class RandomPlayer(BasePlayer):
+    def get_move(self, board: chess.Board, time_left: int) -> chess.Move:
+        return random.choice(list(board.legal_moves))
+
+class LLMPlayer(BasePlayer):
+    def __init__(self,dir_path:str):
+        self.model = AutoModelForCausalLM.from_pretrained(dir_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(dir_path)
+    
+    def board_to_str(self,board:chess.Board):
+        # return a list of moves in algebraic notation
+        return [board.san(move) for move in board.move_stack]
+
+    def get_move(self, board: chess.Board, time_left: int) -> chess.Move:
+        position_input = {
+            "moveHistory": self.board_to_str(board),
+            "possibleMoves": [board.san(move) for move in board.legal_moves],
+            "color": "w" if board.turn else "b"
+        }
+        prompt = f"[INST] {system_prompt}\n\n{json.dumps(position_input)} [/INST]" 
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        outputs = self.model.generate(inputs["input_ids"],max_new_tokens=40)
+        response = self.tokenizer.decode(outputs[0],skip_special_tokens=True)
+        model_response = response.split("[/INST]")[1].strip()
+        response_json = json.loads(model_response)
+        return response_json["move"]
+
+
+if __name__ == "__main__":
+    board = chess.Board()
+    #player = StockfishPlayer(stockfish_skill_elo_map[850])
+    #player = RandomPlayer()
+    print('starting game')
+    player = LLMPlayer("./open_llama_7b-lora-final")
+    move = player.get_move(board,1000)
+    print(move)
+    board.push(move)
+    print(board.fen())
