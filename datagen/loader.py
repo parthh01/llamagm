@@ -155,19 +155,18 @@ def stream_dataset(engine, tokenizer, batch_size=1000):
         for prompt, completion in zip(batch_data["prompt"], batch_data["completion"]):
             yield {"prompt": prompt, "completion": completion}
 
-def create_dataset(engine, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
+def create_dataset(database_url, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
     """Create a Hugging Face dataset using the new format"""
     # Get total rows count
+    engine = create_engine(database_url)
     total_rows = get_total_rows(engine)
-    
-    def generator_fn():
+    def generator_fn(url):
         # Create a new engine inside the generator to avoid pickling issues
-        DATABASE_URL = engine.url
-        local_engine = create_engine(str(DATABASE_URL))
+        local_engine = create_engine(url)
         yield from stream_dataset(local_engine, tokenizer, batch_size)
     
     # Create an IterableDataset using the streaming generator
-    dataset = IterableDataset.from_generator(generator_fn)
+    dataset = IterableDataset.from_generator(lambda: generator_fn(str(database_url)))
     
     # Optionally push to Hugging Face Hub
     if push_to_hub and hub_name:
