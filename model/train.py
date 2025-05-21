@@ -1,6 +1,6 @@
 import torch
 import argparse
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
 from trl import SFTTrainer,SFTConfig
 from peft import LoraConfig, get_peft_model
 from dotenv import load_dotenv
@@ -62,9 +62,17 @@ def main():
     max_steps = (total_rows // args.per_device_train_batch_size) * args.num_train_epochs
     print(f"Training for {max_steps} steps based on {total_rows} examples")
     
+    # Configure quantization
+    quantization_config = None
+    if args.load_in_8bit:
+        quantization_config = BitsAndBytesConfig(
+            load_in_8bit=True,
+            llm_int8_threshold=6.0
+        )
+    
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
-        load_in_8bit=args.load_in_8bit,
+        quantization_config=quantization_config,
         device_map="auto",
         #attn_implementation="flash_attention_2"
     )
