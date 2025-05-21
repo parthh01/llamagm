@@ -129,31 +129,33 @@ def process_batch(batch_df, tokenizer):
 def stream_dataset(engine, tokenizer, batch_size=1000):
     """Stream the dataset in batches and yield processed examples"""
     total_rows = get_total_rows(engine)
+    offset = 0
     
-    with tqdm(total=total_rows, desc="Processing rows") as pbar:
-        # Stream data in batches
-        for offset in range(0, total_rows, batch_size):
-            query = text(f"SELECT * FROM games ORDER BY id LIMIT {batch_size} OFFSET {offset}")
+    # Continue fetching batches until we've processed all rows
+    while offset < total_rows:
+        query = text(f"SELECT * FROM games ORDER BY id LIMIT {batch_size} OFFSET {offset}")
+        
+        with engine.connect() as conn:
+            batch_df = pd.read_sql(query, conn)
+        
+        # If no rows returned, break the loop
+        if len(batch_df) == 0:
+            break
             
-            with engine.connect() as conn:
-                batch_df = pd.read_sql(query, conn)
-            
-            # Process this batch
-            batch_data = process_batch(batch_df, tokenizer)
-            
-            # Yield the batch data directly
-            for prompt, completion in zip(batch_data["prompt"], batch_data["completion"]):
-                yield {"prompt": prompt, "completion": completion}
-            
-            # Update progress
-            pbar.update(len(batch_df))
+        # Process this batch
+        batch_data = process_batch(batch_df, tokenizer)
+        
+        # Increment offset by number of rows returned
+        offset += len(batch_df)
+        
+        # Yield the batch data directly
+        for prompt, completion in zip(batch_data["prompt"], batch_data["completion"]):
+            yield {"prompt": prompt, "completion": completion}
 
 def create_dataset(engine, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
     """Create a Hugging Face dataset using the new format"""
     # Create dataset using the streaming generator
-    dataset = Dataset.from_generator(
-        lambda: stream_dataset(engine, tokenizer, batch_size)
-    )
+    dataset = Dataset.from_generator(lambda: stream_dataset(engine, tokenizer, batch_size))
     
     # Optionally push to Hugging Face Hub
     if push_to_hub and hub_name:
