@@ -160,8 +160,14 @@ def create_dataset(engine, tokenizer, batch_size=1000, push_to_hub=False, hub_na
     # Get total rows count
     total_rows = get_total_rows(engine)
     
+    def generator_fn():
+        # Create a new engine inside the generator to avoid pickling issues
+        DATABASE_URL = engine.url
+        local_engine = create_engine(str(DATABASE_URL))
+        yield from stream_dataset(local_engine, tokenizer, batch_size)
+    
     # Create an IterableDataset using the streaming generator
-    dataset = IterableDataset.from_generator(lambda: stream_dataset(engine, tokenizer, batch_size))
+    dataset = IterableDataset.from_generator(generator_fn)
     
     # Optionally push to Hugging Face Hub
     if push_to_hub and hub_name:
