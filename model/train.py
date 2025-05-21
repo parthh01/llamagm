@@ -51,7 +51,7 @@ def main():
     
     # Get dataset and total rows
     dataset, total_rows = create_dataset(
-        engine=engine,
+        database_url=DATABASE_URL,
         tokenizer=tokenizer,
         batch_size=args.batch_size,
         push_to_hub=args.push_to_hub,
