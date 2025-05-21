@@ -40,7 +40,6 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-
     args = parse_args()
     
     load_dotenv()
@@ -50,7 +49,8 @@ def main():
     DATABASE_URL = f"postgresql://{os.getenv('PGUSER')}:{os.getenv('PGPASSWORD')}@{os.getenv('PGHOST')}:{os.getenv('PGPORT')}/{os.getenv('PGDATABASE')}?sslmode=require"
     engine = create_engine(DATABASE_URL)
     
-    dataset = create_dataset(
+    # Get dataset and total rows
+    dataset, total_rows = create_dataset(
         engine=engine,
         tokenizer=tokenizer,
         batch_size=args.batch_size,
@@ -58,7 +58,9 @@ def main():
         hub_name=args.hub_name
     )
     
-
+    # Calculate max_steps based on total rows
+    max_steps = (total_rows // args.per_device_train_batch_size) * args.num_train_epochs
+    print(f"Training for {max_steps} steps based on {total_rows} examples")
     
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
@@ -90,6 +92,7 @@ def main():
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
         dataset_text_field="prompt",
+        max_steps=max_steps,
     )
     
     # Create trainer and train

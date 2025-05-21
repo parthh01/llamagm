@@ -3,7 +3,7 @@ import json
 import chess
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from datasets import Dataset
+from datasets import Dataset, IterableDataset
 import pandas as pd
 from transformers import AutoTokenizer
 from tqdm import tqdm
@@ -145,8 +145,11 @@ def stream_dataset(engine, tokenizer, batch_size=1000):
         # Process this batch
         batch_data = process_batch(batch_df, tokenizer)
         
-        # Increment offset by number of rows returned
+        # Increment offset by number of rows returned set offset back to 0 if it's greater than total_rows
         offset += len(batch_df)
+        if offset >= total_rows:
+            offset = 0
+
         
         # Yield the batch data directly
         for prompt, completion in zip(batch_data["prompt"], batch_data["completion"]):
@@ -154,17 +157,22 @@ def stream_dataset(engine, tokenizer, batch_size=1000):
 
 def create_dataset(engine, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
     """Create a Hugging Face dataset using the new format"""
-    # Create dataset using the streaming generator
-    dataset = Dataset.from_generator(lambda: stream_dataset(engine, tokenizer, batch_size))
+    # Get total rows count
+    total_rows = get_total_rows(engine)
+    
+    # Create an IterableDataset using the streaming generator
+    dataset = IterableDataset.from_generator(lambda: stream_dataset(engine, tokenizer, batch_size))
     
     # Optionally push to Hugging Face Hub
     if push_to_hub and hub_name:
         dataset.push_to_hub(hub_name)
     
-    print(f"Dataset created with {len(dataset)} examples")
-    print(f"Sample example: {dataset[0]}")
+    print(f"Dataset created successfully with {total_rows} total examples")
+    # Get a sample example to display
+    sample_example = next(iter(dataset))
+    print(f"Sample example: {sample_example}")
     
-    return dataset
+    return dataset, total_rows
 
 if __name__ == "__main__":
     # Example usage
@@ -172,7 +180,7 @@ if __name__ == "__main__":
     DATABASE_URL = f"postgresql://{os.getenv('PGUSER')}:{os.getenv('PGPASSWORD')}@{os.getenv('PGHOST')}:{os.getenv('PGPORT')}/{os.getenv('PGDATABASE')}?sslmode=require"
     engine = create_engine(DATABASE_URL)
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    dataset = create_dataset(
+    dataset, total_rows = create_dataset(
         engine=engine,
         tokenizer=tokenizer,
         batch_size=32,
