@@ -129,10 +129,6 @@ def process_batch(batch_df, tokenizer):
 def stream_dataset(engine, tokenizer, batch_size=1000):
     """Stream the dataset in batches and yield processed examples"""
     total_rows = get_total_rows(engine)
-    processed_rows = 0
-    
-    all_prompts = []
-    all_completions = []
     
     with tqdm(total=total_rows, desc="Processing rows") as pbar:
         # Stream data in batches
@@ -145,21 +141,19 @@ def stream_dataset(engine, tokenizer, batch_size=1000):
             # Process this batch
             batch_data = process_batch(batch_df, tokenizer)
             
-            # Extend our lists
-            all_prompts.extend(batch_data["prompt"])
-            all_completions.extend(batch_data["completion"])
+            # Yield the batch data directly
+            for prompt, completion in zip(batch_data["prompt"], batch_data["completion"]):
+                yield {"prompt": prompt, "completion": completion}
             
             # Update progress
-            processed_rows += len(batch_df)
             pbar.update(len(batch_df))
-    
-    return {"prompt": all_prompts, "completion": all_completions}
 
 def create_dataset(engine, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
     """Create a Hugging Face dataset using the new format"""
-    # Create dataset using the new dictionary format
-    data_dict = stream_dataset(engine, tokenizer, batch_size)
-    dataset = Dataset.from_dict(data_dict)
+    # Create dataset using the streaming generator
+    dataset = Dataset.from_generator(
+        lambda: stream_dataset(engine, tokenizer, batch_size)
+    )
     
     # Optionally push to Hugging Face Hub
     if push_to_hub and hub_name:
