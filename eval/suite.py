@@ -63,7 +63,12 @@ class ChessGauntlet:
         # Use longer timeout for Stockfish players
         stockfish_timeout = 15 if isinstance(opponent, StockfishPlayer) else move_timeout
         
-        while not board.is_game_over():
+        # Add ply counter to limit game length
+        ply_count = 0
+        max_plies = 50  # 25 moves per side
+        
+        while not board.is_game_over() and ply_count < max_plies:
+            ply_count += 1
             current_player = self.player if (board.turn == chess.WHITE) == player_is_white else opponent
             
             try:
@@ -128,13 +133,35 @@ class ChessGauntlet:
                 break
         
         # Determine game result
-        result = board.result()
-        if result == "1-0":
-            score = 1.0 if player_is_white else 0.0
-        elif result == "0-1":
-            score = 0.0 if player_is_white else 1.0
-        else:  # Draw
-            score = 0.5
+        if ply_count >= max_plies:
+            # Game reached ply limit, use Stockfish to evaluate position
+            try:
+                # Create a strong Stockfish instance for evaluation
+                evaluator = StockfishPlayer({"skill_level": 20, "depth": 18})
+                with evaluator.lock:
+                    eval_score = evaluator.evaluate_position(board)
+                
+                # Positive score favors white, negative favors black
+                if eval_score > 0.5:  # White is winning
+                    score = 1.0 if player_is_white else 0.0
+                elif eval_score < -0.5:  # Black is winning
+                    score = 0.0 if player_is_white else 1.0
+                else:  # Draw-ish position
+                    score = 0.5
+                
+                print(f"Game reached {max_plies} ply limit. Stockfish eval: {eval_score}. Score: {score}")
+            except Exception as e:
+                print(f"Error evaluating final position: {e}. Defaulting to draw.")
+                score = 0.5
+        else:
+            # Normal game end
+            result = board.result()
+            if result == "1-0":
+                score = 1.0 if player_is_white else 0.0
+            elif result == "0-1":
+                score = 0.0 if player_is_white else 1.0
+            else:  # Draw
+                score = 0.5
             
         return score, invalid_moves, illegal_moves, moves_made
     

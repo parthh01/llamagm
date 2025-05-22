@@ -38,6 +38,27 @@ class StockfishPlayer(BasePlayer):
         move = self.stockfish.get_best_move()
         return chess.Move.from_uci(move)
         
+    def evaluate_position(self, board: chess.Board) -> float:
+        """
+        Evaluate the current position using Stockfish.
+        Returns a float representing the evaluation in pawns from white's perspective.
+        Positive values favor white, negative values favor black.
+        """
+        with self.lock:
+            self.stockfish.set_fen_position(board.fen())
+            evaluation = self.stockfish.get_evaluation()
+            
+            if evaluation['type'] == 'cp':
+                # Convert centipawns to pawns
+                return evaluation['value'] / 100.0
+            elif evaluation['type'] == 'mate':
+                # Return a large value for mate, with sign indicating which side is winning
+                # Positive mate score means white is winning, negative means black is winning
+                return 1.0 if evaluation['value'] > 0 else -1.0
+            else:
+                # Fallback for unexpected evaluation type
+                return 0.5
+    
     def __del__(self):
         # Clean up Stockfish process when the player is destroyed
         if hasattr(self, 'stockfish'):
@@ -78,7 +99,6 @@ class LLMPlayer(BasePlayer):
         outputs = self.model.generate(inputs["input_ids"],max_new_tokens=40)
         response = self.tokenizer.decode(outputs[0],skip_special_tokens=True)
         model_response = response.split("[/INST]")[1].strip()
-        print(model_response)
         response_json = json.loads(model_response)
         return board.parse_san(response_json["move"])
 
