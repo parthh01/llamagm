@@ -78,7 +78,6 @@ class ChessGauntlet:
                         with self.player_lock:  # Acquire lock when accessing the player
                             try:
                                 move = self.player.get_move(board, time_limit)
-                                print('the parsed move: ',move)
                             except Exception as e:
 
                                 print(f"Error during move generation: {e} defaulting to random move")
@@ -137,7 +136,7 @@ class ChessGauntlet:
             # Game reached ply limit, use Stockfish to evaluate position
             try:
                 # Create a strong Stockfish instance for evaluation
-                evaluator = StockfishPlayer({"skill_level": 20, "depth": 18})
+                evaluator = StockfishPlayer({"Skill Level": 20, "Threads": 1,"Depth": 10})
                 with evaluator.lock:
                     eval_score = evaluator.evaluate_position(board)
                 

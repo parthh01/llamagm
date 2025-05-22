@@ -100,6 +100,13 @@ class LLMPlayer(BasePlayer):
         response = self.tokenizer.decode(outputs[0],skip_special_tokens=True)
         model_response = response.split("[/INST]")[1].strip()
         response_json = json.loads(model_response)
+        
+        move_str = response_json["move"]
+        # Check if the move is in the list of legal moves
+        legal_moves_san = [board.san(move) for move in board.legal_moves]
+        if move_str not in legal_moves_san:
+            raise ValueError(f"Illegal move suggested by LLM: {move_str}")
+            
         return board.parse_san(response_json["move"])
 
 
