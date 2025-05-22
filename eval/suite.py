@@ -5,9 +5,12 @@ from typing import List, Dict, Tuple, Optional
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import numpy as np
-from eval.players import BasePlayer, RandomPlayer, StockfishPlayer, stockfish_skill_elo_map
+from eval.players import BasePlayer, RandomPlayer, StockfishPlayer,LLMPlayer, stockfish_skill_elo_map
 import concurrent.futures
 import threading
+from dotenv import load_dotenv 
+
+load_dotenv()
 
 class ChessGauntlet:
     def __init__(self, player: BasePlayer, games_per_level: int = 10, starting_elo: int = 800, num_threads: int = 4):
@@ -67,6 +70,7 @@ class ChessGauntlet:
                 if current_player == self.player:
                     moves_made += 1
                     try:
+<<<<<<< HEAD
                         with self.player_lock:  # Acquire lock when accessing the player
                             try:
                                 move = self.player.get_move(board, time_limit)
@@ -307,7 +311,7 @@ class ChessGauntlet:
         
         return results
     
-    def plot_elo_progression(self, results: Dict):
+    def plot_elo_progression(self, results: Dict,show=False):
         """Plot the ELO progression throughout the gauntlet."""
         plt.figure(figsize=(12, 6))
         plt.plot(results["elo_history"])
@@ -316,7 +320,7 @@ class ChessGauntlet:
         plt.ylabel("ELO Rating")
         plt.grid(True)
         plt.savefig("elo_progression.png")
-        plt.show()
+        if show: plt.show()
         
         # Print summary of results
         print(f"Final ELO: {results['final_elo']}")
@@ -337,11 +341,11 @@ class ChessGauntlet:
 if __name__ == "__main__":
     
     # Initialize your LLM player
-    #player = LLMPlayer("path/to/your/model")
+    player = LLMPlayer("./openlm-research/open_llama_7b-lora-final")
     #player = RandomPlayer()
-    player = StockfishPlayer(stockfish_skill_elo_map[1700])
+    #player = StockfishPlayer(stockfish_skill_elo_map[1700])
     # Create and run the gauntlet
-    gauntlet = ChessGauntlet(player, games_per_level=100, starting_elo=800, num_threads=4)
+    gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
     results = gauntlet.run_gauntlet()
     
     # Plot results
