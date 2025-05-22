@@ -62,7 +62,7 @@ def generate_reasoning(row, tokenizer):
         token_count = len(tokenizer.encode(test_text))
         
         # If adding this word would exceed our limit, stop
-        if token_count >= 40:
+        if token_count >= 33: # need to leave room for the extra json syntax 
             break
             
         description += f"{word} "

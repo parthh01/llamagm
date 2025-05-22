@@ -55,13 +55,21 @@ class LLMPlayer(BasePlayer):
         self.model = AutoModelForCausalLM.from_pretrained(dir_path)
         self.tokenizer = AutoTokenizer.from_pretrained(dir_path)
     
-    def board_to_str(self,board:chess.Board):
-        # return a list of moves in algebraic notation
-        return [board.san(move) for move in board.move_stack]
+    def get_move_history_in_san(self, board: chess.Board) -> list:
+        """Generate SAN move history by replaying the game from the beginning."""
+        move_history = []
+        temp_board = chess.Board()
+        
+        for move in board.move_stack:
+            san_move = temp_board.san(move)
+            move_history.append(san_move)
+            temp_board.push(move)
+            
+        return move_history
 
     def get_move(self, board: chess.Board, time_left: int) -> chess.Move:
         position_input = {
-            "moveHistory": self.board_to_str(board),
+            "moveHistory": self.get_move_history_in_san(board),
             "possibleMoves": [board.san(move) for move in board.legal_moves],
             "color": "w" if board.turn else "b"
         }

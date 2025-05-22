@@ -68,16 +68,12 @@ class ChessGauntlet:
                     moves_made += 1
                     try:
                         with self.player_lock:  # Acquire lock when accessing the player
-                            # Use a timeout for the get_move call
-                            with concurrent.futures.ThreadPoolExecutor() as executor:
-                                future = executor.submit(current_player.get_move, board, time_limit)
-                                try:
-                                    move = future.result(timeout=move_timeout)
-                                except concurrent.futures.TimeoutError:
-                                    print(f"Move generation timed out after {move_timeout} seconds")
-                                    invalid_moves += 1
-                                    # If timeout, make a random legal move instead
-                                    move = RandomPlayer().get_move(board, time_limit)
+                            try:
+                                move = self.player.get_move(board, time_limit)
+                            except Exception as e:
+                                print(f"Error during move generation: {e} defaulting to random move")
+                                invalid_moves += 1
+                                move = RandomPlayer().get_move(board, time_limit)
                         # Check if move is legal
                         if move not in board.legal_moves:
                             illegal_moves += 1
