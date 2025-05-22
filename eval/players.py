@@ -52,7 +52,7 @@ class RandomPlayer(BasePlayer):
 
 class LLMPlayer(BasePlayer):
     def __init__(self,dir_path:str):
-        self.model = AutoModelForCausalLM.from_pretrained(dir_path)
+        self.model = AutoModelForCausalLM.from_pretrained(dir_path,device_map="auto")
         self.tokenizer = AutoTokenizer.from_pretrained(dir_path)
     
     def get_move_history_in_san(self, board: chess.Board) -> list:
@@ -78,8 +78,9 @@ class LLMPlayer(BasePlayer):
         outputs = self.model.generate(inputs["input_ids"],max_new_tokens=40)
         response = self.tokenizer.decode(outputs[0],skip_special_tokens=True)
         model_response = response.split("[/INST]")[1].strip()
+        print(model_response)
         response_json = json.loads(model_response)
-        return response_json["move"]
+        return board.parse_san(response_json["move"])
 
 
 if __name__ == "__main__":

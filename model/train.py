@@ -50,7 +50,7 @@ def main():
     engine = create_engine(DATABASE_URL)
     
     # Get dataset and total rows
-    dataset, total_rows = create_dataset(
+    training_dataset, total_rows = create_dataset(
         database_url=DATABASE_URL,
         tokenizer=tokenizer,
         batch_size=args.batch_size,
@@ -99,7 +99,6 @@ def main():
         per_device_train_batch_size=args.per_device_train_batch_size,
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
-        dataset_text_field="prompt",
         max_steps=max_steps,
     )
     
@@ -107,7 +106,7 @@ def main():
     trainer = SFTTrainer(
         model=model,
         args=training_args,
-        train_dataset=dataset,
+        train_dataset=training_dataset,
     )
     
     trainer.train()

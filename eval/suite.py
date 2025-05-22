@@ -70,11 +70,12 @@ class ChessGauntlet:
                 if current_player == self.player:
                     moves_made += 1
                     try:
-<<<<<<< HEAD
                         with self.player_lock:  # Acquire lock when accessing the player
                             try:
                                 move = self.player.get_move(board, time_limit)
+                                print('the parsed move: ',move)
                             except Exception as e:
+
                                 print(f"Error during move generation: {e} defaulting to random move")
                                 invalid_moves += 1
                                 move = RandomPlayer().get_move(board, time_limit)
@@ -86,6 +87,7 @@ class ChessGauntlet:
                     except Exception as e:
                         invalid_moves += 1
                         # If invalid move (parsing error), make a random legal move
+                        print("error parsing move: ", e)
                         move = RandomPlayer().get_move(board, time_limit)
                 else:
                     # Also add timeout for opponent moves
@@ -341,11 +343,11 @@ class ChessGauntlet:
 if __name__ == "__main__":
     
     # Initialize your LLM player
-    player = LLMPlayer("./openlm-research/open_llama_7b-lora-final")
+    player = LLMPlayer("./openlm-research/open_llama_7b-lora/checkpoint-500")
     #player = RandomPlayer()
     #player = StockfishPlayer(stockfish_skill_elo_map[1700])
     # Create and run the gauntlet
-    gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
+    gauntlet = ChessGauntlet(player, games_per_level=1, starting_elo=800, num_threads=4)
     results = gauntlet.run_gauntlet()
     
     # Plot results

@@ -45,31 +45,60 @@ def generate_reasoning(row, tokenizer):
         else:
             eval_info = f"Black advantage: {abs(eval_value)}"
     
-    # Start with just the evaluation info
-    reasoning = eval_info
+    # Calculate tokens for the JSON structure and move
+    completion_template = json.dumps({
+        "move": row['move'],
+        "reasoning": ""
+    })
+    base_token_count = len(tokenizer.encode(completion_template))
+    max_tokens = 40
+    available_tokens = max_tokens - base_token_count
+    
+    # First ensure we can fit the eval_info
+    eval_tokens = len(tokenizer.encode(eval_info))
+    if eval_tokens > available_tokens:
+        # Truncate eval_info if it's too long
+        while eval_tokens > available_tokens:
+            eval_info = eval_info[:-5]  # Remove 5 chars at a time
+            eval_tokens = len(tokenizer.encode(eval_info))
+        return eval_info
     
     # If there's no description, return just the eval info
     if not row['description']:
-        return reasoning
+        return eval_info
+    
+    # Calculate remaining tokens for description
+    remaining_tokens = available_tokens - eval_tokens
     
     # Try to add description words while keeping under token limit
     words = row['description'].split()
     description = ""
     
     for word in words:
-        test_text = f"{description} {word} {eval_info}".strip()
-        # Count tokens in the test text
-        token_count = len(tokenizer.encode(test_text))
+        test_description = f"{description} {word}".strip()
+        test_tokens = len(tokenizer.encode(test_description))
         
-        # If adding this word would exceed our limit, stop
-        if token_count >= 33: # need to leave room for the extra json syntax 
+        # Check if adding this word would exceed our remaining tokens
+        if test_tokens > remaining_tokens:
             break
             
-        description += f"{word} "
+        description = test_description
     
-    # Combine description and eval info if we have description
+    # Combine description and eval info
     if description:
-        reasoning = f"{description.strip()} {eval_info}"
+        reasoning = f"{description} {eval_info}"
+    else:
+        reasoning = eval_info
+    
+    # Final check to ensure we're under the token limit
+    full_completion = json.dumps({
+        "move": row['move'],
+        "reasoning": reasoning
+    })
+    
+    if len(tokenizer.encode(full_completion)) > max_tokens:
+        # If somehow we're still over the limit, return just the eval_info
+        return eval_info
     
     return reasoning
 
@@ -145,18 +174,17 @@ def stream_dataset(engine, tokenizer, batch_size=1000):
         # Process this batch
         batch_data = process_batch(batch_df, tokenizer)
         
-        # Increment offset by number of rows returned set offset back to 0 if it's greater than total_rows
+        # Increment offset by number of rows returned
         offset += len(batch_df)
-        if offset >= total_rows:
-            offset = 0
-
         
-        # Yield the batch data directly
+        # Yield the batch data as a single text field
         for prompt, completion in zip(batch_data["prompt"], batch_data["completion"]):
-            yield {"prompt": prompt, "completion": completion}
+            # Combine prompt and completion into a single text field
+            combined_text = f"{prompt} {completion}"
+            yield {"text": combined_text}
 
 def create_dataset(database_url, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
-    """Create a Hugging Face dataset using the new format"""
+    """Create a Hugging Face dataset using a single text field format"""
     # Get total rows count
     engine = create_engine(database_url)
     total_rows = get_total_rows(engine)
@@ -183,14 +211,13 @@ if __name__ == "__main__":
     # Example usage
     load_dotenv()
     DATABASE_URL = f"postgresql://{os.getenv('PGUSER')}:{os.getenv('PGPASSWORD')}@{os.getenv('PGHOST')}:{os.getenv('PGPORT')}/{os.getenv('PGDATABASE')}?sslmode=require"
-    engine = create_engine(DATABASE_URL)
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    tokenizer = AutoTokenizer.from_pretrained("./openlm-research/open_llama_7b-lora-final")
     dataset, total_rows = create_dataset(
-        engine=engine,
+        database_url=DATABASE_URL,
         tokenizer=tokenizer,
         batch_size=32,
         push_to_hub=False,
         hub_name=None  # "your-username/chess-moves-dataset"
     )
-    print(dataset[0])
+    print(next(iter(dataset)))
 

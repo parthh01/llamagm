@@ -3,13 +3,13 @@ import os
 import json 
 import torch 
 from constants import system_prompt
-model_name = "./open_llama_7b-lora-final"
+model_name = "./openlm-research/open_llama_7b-lora/checkpoint-500"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
 model_name,
 #quantization_config=BitsAndBytesConfig(load_in_8bit=True),
 torch_dtype="auto",
-device_map="cpu", # "auto"
+device_map= "auto",
 offload_folder="./offload_folder",
 )
 
@@ -43,3 +43,4 @@ if __name__ == "__main__":
 }
 	response = test_chess_model(pos_data)
 	print(response)
+
