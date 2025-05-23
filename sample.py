@@ -6,7 +6,7 @@ import chess
 import chess.engine
 from constants import system_prompt
 
-model_name = "./openlm-research/open_llama_7b-lora/checkpoint-500"
+model_name = "./open_llama_7b-lora-final"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
@@ -90,8 +90,8 @@ def play_full_game(llm_is_white=True, stockfish_time=1.0, stockfish_depth=10):
     
     # Initialize Stockfish engine
     try:
-        engine = chess.engine.SimpleEngine.popen_uci("/usr/local/bin/stockfish")  # Adjust path as needed
-        engine.configure({"Skill Level": 10, "Depth": stockfish_depth})
+        engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")  # Adjust path as needed
+        engine.configure({"Skill Level": 10})
     except:
         try:
             engine = chess.engine.SimpleEngine.popen_uci("stockfish")  # Try without path
