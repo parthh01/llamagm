@@ -3,12 +3,14 @@ import os
 import json 
 import torch 
 import chess
-import chess.engine
 import random
 from constants import system_prompt
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Import the StockfishPlayer from eval module
+from eval.players import StockfishPlayer, stockfish_skill_elo_map
 
 model_name = "./open_llama_7b-lora-final"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -93,12 +95,13 @@ def get_llm_move(board):
         print(f"Raw response: {response}")
         return None, "ERROR"
 
-def get_stockfish_move(board, engine, time_limit=1.0):
-    """Get a move from Stockfish."""
+def get_stockfish_move(stockfish_player, board):
+    """Get a move from Stockfish using StockfishPlayer."""
     try:
-        result = engine.play(board, chess.engine.Limit(time=time_limit))
-        move_san = board.san(result.move)
-        return result.move, move_san
+        with stockfish_player.lock:
+            move = stockfish_player.get_move(board, 10000)  # 10 second time limit
+            move_san = board.san(move)
+            return move, move_san
     except Exception as e:
         print(f"Stockfish error: {e}")
         return None, "ERROR"
@@ -106,34 +109,21 @@ def get_stockfish_move(board, engine, time_limit=1.0):
 def evaluate_position_with_stockfish(board, depth=15):
     """Evaluate the current position using Stockfish and return a score."""
     try:
-        # Create a temporary Stockfish engine for evaluation
-        eval_engine = chess.engine.SimpleEngine.popen_uci(os.getenv("STOCKFISH_PATH",'/usr/local/bin/stockfish'))
-        eval_engine.configure({"Depth": depth})
+        # Create a temporary strong Stockfish instance for evaluation
+        eval_params = {"Skill Level": 20, "Threads": 1}
         
-        # Get evaluation in centipawns
-        info = eval_engine.analyse(board, chess.engine.Limit(depth=depth))
-        score = info["score"].relative
+        evaluator = StockfishPlayer(eval_params)
         
-        eval_engine.quit()
+        with evaluator.lock:
+            eval_score = evaluator.evaluate_position(board)
         
-        # Convert score to a normalized value
-        if score.is_mate():
-            # If it's a forced mate, return extreme values
-            mate_in = score.mate()
-            if mate_in > 0:
-                return 10.0  # White is winning
-            else:
-                return -10.0  # Black is winning
-        else:
-            # Convert centipawns to a more readable format
-            cp_score = score.score() / 100.0  # Convert to pawns
-            return cp_score
+        return eval_score
             
     except Exception as e:
         print(f"Error evaluating position: {e}")
         return 0.0  # Return draw if evaluation fails
 
-def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, stockfish_depth=10):
+def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_elo=1250):
     """
     Play a full game between LLM and opponent with move-by-move output.
     Game truncates after 50 moves (25 per side) and winner is decided by Stockfish evaluation.
@@ -141,24 +131,19 @@ def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, 
     Args:
         opponent: "stockfish" or "random"
         llm_is_white: Whether LLM plays as white
-        stockfish_time: Time limit for Stockfish moves (only used if opponent="stockfish")
-        stockfish_depth: Depth setting for Stockfish (only used if opponent="stockfish")
+        stockfish_elo: ELO level for Stockfish (only used if opponent="stockfish")
     """
     
     # Initialize opponent
-    engine = None
+    stockfish_player = None
     if opponent == "stockfish":
-        try:
-            engine = chess.engine.SimpleEngine.popen_uci(os.getenv("STOCKFISH_PATH",'/usr/local/bin/stockfish'))
-            engine.configure({"Skill Level": 10, "Depth": stockfish_depth})
-        except:
-            try:
-                engine = chess.engine.SimpleEngine.popen_uci("stockfish")
-                engine.configure({"Skill Level": 10, "Depth": stockfish_depth})
-            except Exception as e:
-                print(f"Could not initialize Stockfish: {e}")
-                return
-        opponent_name = "Stockfish"
+        if stockfish_elo not in stockfish_skill_elo_map:
+            print(f"Invalid Stockfish ELO: {stockfish_elo}. Available: {list(stockfish_skill_elo_map.keys())}")
+            return
+        
+        stockfish_params = stockfish_skill_elo_map[stockfish_elo]
+        stockfish_player = StockfishPlayer(stockfish_params)
+        opponent_name = f"Stockfish (ELO {stockfish_elo})"
     elif opponent == "random":
         opponent_name = "Random Player"
     else:
@@ -198,7 +183,7 @@ def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, 
                 print(f"Position: {board.fen()}")
                 
                 if opponent == "stockfish":
-                    move, move_san = get_stockfish_move(board, engine, stockfish_time)
+                    move, move_san = get_stockfish_move(stockfish_player, board)
                 elif opponent == "random":
                     move, move_san = get_random_move(board)
                 
@@ -283,8 +268,12 @@ def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, 
     except Exception as e:
         print(f"Error during game: {e}")
     finally:
-        if engine:
-            engine.quit()
+        # Clean up Stockfish player if it was created
+        if stockfish_player:
+            try:
+                del stockfish_player
+            except:
+                pass
 
 if __name__ == "__main__":
     # Play a game with LLM as white against random player
@@ -293,11 +282,11 @@ if __name__ == "__main__":
     
     print("\n" + "="*80 + "\n")
     
-    # # Play a game with LLM as white against Stockfish
-    # print("Playing game with LLM as White vs Stockfish...")
-    # play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, stockfish_depth=10)
+    # Play a game with LLM as white against Stockfish
+    print("Playing game with LLM as White vs Stockfish...")
+    play_full_game(opponent="stockfish", llm_is_white=True, stockfish_elo=1250)
     
-    # print("\n" + "="*80 + "\n")
+    print("\n" + "="*80 + "\n")
     
     # Uncomment to play more games
     # print("Playing game with LLM as Black vs Random Player...")
