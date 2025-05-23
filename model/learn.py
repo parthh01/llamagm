@@ -343,7 +343,6 @@ class ChessGRPOTrainer:
                 args=self.grpo_config,
                 train_dataset=dataset,
                 reward_funcs=self.chess_reward_function,
-                tokenizer=self.tokenizer,
             )
             
             # Train for one iteration

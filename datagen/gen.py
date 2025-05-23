@@ -394,28 +394,30 @@ def generate_grpo_games(model, tokenizer, env, num_games: int = 100, max_moves_p
                 prompt = f"[INST] {system_prompt}\n\n{json.dumps(position_input)} [/INST]"
                 
                 # Generate model response
-                inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+                inputs = tokenizer(prompt, return_tensors="pt")
                 inputs = {k: v.to(model.device) for k, v in inputs.items()}
                 
                 with torch.no_grad():
                     outputs = model.generate(
                         inputs["input_ids"],
-                        max_new_tokens=100,
-                        do_sample=True,
-                        temperature=0.8,
-                        top_p=0.9,
+                        max_new_tokens=40,
                         pad_token_id=tokenizer.eos_token_id
                     )
                 
                 # Decode response
                 response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-                model_response = response.split("[/INST]")[1].strip()
+                try:
+                    model_response = response.split("[/INST]")[1].strip()
+                except Exception as e:
+                    print('problem parsing the response from the llm: ',)
+                    print('the response: ',response)
+                    print(e)
                 
                 # Store the training example (prompt and completion only)
                 game_data.append({
                     "prompt": prompt,
                     "completion": model_response,
-                    "board_state": board.fen(),  # Store board state for reward calculation
+                    "board_state": board.fen(), 
                     "game_id": game_idx,
                     "move_number": move_count + 1
                 })
