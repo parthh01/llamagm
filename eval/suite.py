@@ -369,7 +369,7 @@ class ChessGauntlet:
 if __name__ == "__main__":
     
     # Initialize your LLM player
-    player = LLMPlayer("./openlm-research/open_llama_7b-lora/checkpoint-500")
+    player = LLMPlayer("./open_llama_7b-lora-final")
     #player = RandomPlayer()
     #player = StockfishPlayer(stockfish_skill_elo_map[1700])
     # Create and run the gauntlet

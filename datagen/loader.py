@@ -3,7 +3,7 @@ import json
 import chess
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from datasets import Dataset, IterableDataset
+from datasets import Dataset, IterableDataset, load_dataset
 import pandas as pd
 from transformers import AutoTokenizer
 from tqdm import tqdm
@@ -206,6 +206,7 @@ def create_dataset(database_url, tokenizer, batch_size=1000, push_to_hub=False, 
     print(f"Sample example: {sample_example}")
     
     return dataset, total_rows
+
 
 if __name__ == "__main__":
     # Example usage

@@ -7,6 +7,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import json 
 from constants import system_prompt
 import threading
+from peft import PeftModel, PeftConfig
 
 #derived from https://lichess.org/forum/general-chess-discussion/what-elo-are-the-various-stockfish-levels and https://www.reddit.com/r/chess/comments/ltzzon/what_is_the_approximate_elo_rating_of_each_of_the/
 #really we are just using this for relative strength so even if these elo ratings aren't quite accurate, that it's the idential ratings used for all evals allows for relative comparisons
@@ -72,10 +73,38 @@ class RandomPlayer(BasePlayer):
         return random.choice(list(board.legal_moves))
 
 class LLMPlayer(BasePlayer):
-    def __init__(self,dir_path:str):
-        self.model = AutoModelForCausalLM.from_pretrained(dir_path,device_map="auto")
-        self.tokenizer = AutoTokenizer.from_pretrained(dir_path)
+    def __init__(self, dir_path: str):
+        self.model, self.tokenizer = self._load_model(dir_path)
     
+    def _load_model(self, model_path: str):
+        """Load model with PEFT support"""
+        try:
+            # Try to load as PEFT model first
+            peft_config = PeftConfig.from_pretrained(model_path)
+            base_model = AutoModelForCausalLM.from_pretrained(
+                peft_config.base_model_name_or_path,
+                device_map="auto"
+            )
+            model = PeftModel.from_pretrained(base_model, model_path)
+            
+            # Load tokenizer
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(model_path)
+            except:
+                tokenizer = AutoTokenizer.from_pretrained(peft_config.base_model_name_or_path)
+            
+            print(f"Successfully loaded PEFT model from {model_path}")
+            
+        except Exception as e:
+            print(f"Failed to load as PEFT model: {e}")
+            print(f"Attempting to load as regular model...")
+            
+            # Fallback to regular model loading
+            model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto")
+            tokenizer = AutoTokenizer.from_pretrained(model_path)
+        
+        return model, tokenizer
+
     def get_move_history_in_san(self, board: chess.Board) -> list:
         """Generate SAN move history by replaying the game from the beginning."""
         move_history = []
