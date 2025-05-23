@@ -308,16 +308,15 @@ class ChessGRPOTrainer:
         Takes completions and returns rewards for each.
         """
         rewards = []
-        
         # Get the current batch of board states from kwargs
-        board_states = kwargs.get('board_states', [])
+        board_states = kwargs.get('board_state', [])
         
-        if len(board_states) != len(completions):
-            # Fallback: create dummy boards if states not provided
-            board_states = [chess.Board() for _ in completions]
+        if len(board_states) != len(completions): raise ValueError("Number of board states and completions must match")
         
-        for completion, board_state in zip(completions, board_states):
+        for completion, fen_string in zip(completions, board_states):
             try:
+                # Construct chess board from FEN string
+                board_state = chess.Board(fen_string)
                 # Calculate reward using our existing environment
                 reward, _ = self.env.calculate_reward(board_state, completion)
                 rewards.append(reward)

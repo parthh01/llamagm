@@ -64,8 +64,7 @@ def get_llm_move(board):
     outputs = model.generate(
         inputs["input_ids"],
         max_new_tokens=40,
-        do_sample=True,
-        temperature=0.7
+        temperature=0
     )
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
     
