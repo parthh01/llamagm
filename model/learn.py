@@ -5,8 +5,8 @@ import chess.engine
 import numpy as np
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import PeftModel, PeftConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from peft import PeftModel, PeftConfig, LoraConfig, get_peft_model
 from trl import GRPOConfig, GRPOTrainer
 from datasets import Dataset
 import os
@@ -252,48 +252,68 @@ class ChessGRPOTrainer:
         )
     
     def _load_peft_model(self, model_path: str):
-        """Load PEFT model and tokenizer"""
+        """Load model with LoRA like in train.py"""
+        
+        # Load tokenizer first
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        
         try:
-            # Try to load as PEFT model first
+            # Try to load as existing PEFT model first
             peft_config = PeftConfig.from_pretrained(model_path)
+            
+            # Configure quantization like in train.py
+            quantization_config = None
+            
+            # Load base model with quantization
             base_model = AutoModelForCausalLM.from_pretrained(
                 peft_config.base_model_name_or_path,
-                device_map="auto"
+                quantization_config=quantization_config,
+                device_map="auto",
+                trust_remote_code=True
             )
+            
+            # Load the PEFT model on top
             model = PeftModel.from_pretrained(base_model, model_path)
             
-            # Merge and unload for GRPO training (GRPO needs a regular model, not PEFT)
-            model = model.merge_and_unload()
-            model = model.bfloat16()
-            
-            # IMPORTANT: Enable gradients for all parameters after merge_and_unload
-            for param in model.parameters():
-                param.requires_grad = True
-            
-            # Load tokenizer from the PEFT model directory or base model
-            try:
-                tokenizer = AutoTokenizer.from_pretrained(model_path)
-            except:
-                tokenizer = AutoTokenizer.from_pretrained(peft_config.base_model_name_or_path)
-            
-            print(f"Successfully loaded PEFT model from {model_path}")
+            print(f"Successfully loaded existing PEFT model from {model_path}")
             print(f"Base model: {peft_config.base_model_name_or_path}")
             
         except Exception as e:
-            print(f"Failed to load as PEFT model: {e}")
-            print(f"Attempting to load as regular model...")
+            print(f"Failed to load as existing PEFT model: {e}")
+            print(f"Loading as base model and applying LoRA...")
             
-            # Fallback to regular model loading
-            model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto")
-            tokenizer = AutoTokenizer.from_pretrained(model_path)
+            # Configure quantization like in train.py
+            quantization_config = BitsAndBytesConfig(
+                load_in_8bit=True,
+                llm_int8_threshold=6.0
+            )
             
-            # Ensure gradients are enabled for regular models too
-            for param in model.parameters():
-                param.requires_grad = True
+            # Load base model with quantization
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                quantization_config=quantization_config,
+                device_map="auto",
+                trust_remote_code=True
+            )
+            
+            # Apply LoRA configuration like in train.py
+            lora_config = LoraConfig(
+                r=16,
+                lora_alpha=32,
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+                lora_dropout=0.05,
+                task_type="CAUSAL_LM"
+            )
+            model = get_peft_model(model, lora_config)
+            
+            print(f"Applied LoRA to base model {model_path}")
         
-        # Set pad token if not present
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
+        # Print memory usage for debugging
+        if torch.cuda.is_available():
+            print(f"GPU memory allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+            print(f"GPU memory reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
             
         return model, tokenizer
     
@@ -385,6 +405,12 @@ def parse_args():
                        help="Initial Stockfish skill level")
     parser.add_argument("--progressive", action="store_true",
                        help="Use progressive training against increasing Stockfish levels")
+    parser.add_argument("--load_in_8bit", action="store_true", default=True,
+                       help="Whether to load model in 8-bit quantization")
+    parser.add_argument("--lora_r", type=int, default=16,
+                       help="LoRA attention dimension")
+    parser.add_argument("--lora_alpha", type=int, default=32,
+                       help="LoRA alpha parameter")
     
     return parser.parse_args()
 
