@@ -6,7 +6,6 @@ datasets
 accelerate 
 peft 
 bitsandbytes 
-torch 
 tiktoken 
 blobfile 
 protobuf 

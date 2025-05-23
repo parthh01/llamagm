@@ -14,7 +14,9 @@ This isn't a trivial assertion, because a good move is independent of a good gam
 
 idk if i'll have time to implement this, but i suspect the optimal strategy is to SFT the model on the distribution of moves of stockfish eval instead of state-best move pairs. (stockfish has an eval for each possible move) the most scalable thing the model can learn is exactly this softmax distribution, it should jack sample efficiency right up and prove far more scalable than solely training on the state-best move pair. 
 
-prereqs: 
+prereqs:
+ - pytorch 
+ - cuda  
  - stockfish 
  - python 
  - huggingface api key 
