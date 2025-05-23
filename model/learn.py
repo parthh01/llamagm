@@ -265,6 +265,10 @@ class ChessGRPOTrainer:
             # Merge and unload for GRPO training (GRPO needs a regular model, not PEFT)
             model = model.merge_and_unload()
             
+            # IMPORTANT: Enable gradients for all parameters after merge_and_unload
+            for param in model.parameters():
+                param.requires_grad = True
+            
             # Load tokenizer from the PEFT model directory or base model
             try:
                 tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -281,6 +285,10 @@ class ChessGRPOTrainer:
             # Fallback to regular model loading
             model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto")
             tokenizer = AutoTokenizer.from_pretrained(model_path)
+            
+            # Ensure gradients are enabled for regular models too
+            for param in model.parameters():
+                param.requires_grad = True
         
         # Set pad token if not present
         if tokenizer.pad_token is None:
@@ -324,7 +332,7 @@ class ChessGRPOTrainer:
                 # Fallback reward for any errors
                 print(f"Error calculating reward: {e}")
                 rewards.append(-10.0)  # Large negative reward for errors
-        
+        print('rewards: ', rewards) 
         return rewards
     
     def train(self, num_iterations: int = 10, games_per_iteration: int = 100):
