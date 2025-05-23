@@ -6,6 +6,9 @@ import chess
 import chess.engine
 import random
 from constants import system_prompt
+from dotenv import load_dotenv
+
+load_dotenv()
 
 model_name = "./open_llama_7b-lora-final"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -100,9 +103,40 @@ def get_stockfish_move(board, engine, time_limit=1.0):
         print(f"Stockfish error: {e}")
         return None, "ERROR"
 
+def evaluate_position_with_stockfish(board, depth=15):
+    """Evaluate the current position using Stockfish and return a score."""
+    try:
+        # Create a temporary Stockfish engine for evaluation
+        eval_engine = chess.engine.SimpleEngine.popen_uci(os.getenv("STOCKFISH_PATH",'/usr/local/bin/stockfish'))
+        eval_engine.configure({"Depth": depth})
+        
+        # Get evaluation in centipawns
+        info = eval_engine.analyse(board, chess.engine.Limit(depth=depth))
+        score = info["score"].relative
+        
+        eval_engine.quit()
+        
+        # Convert score to a normalized value
+        if score.is_mate():
+            # If it's a forced mate, return extreme values
+            mate_in = score.mate()
+            if mate_in > 0:
+                return 10.0  # White is winning
+            else:
+                return -10.0  # Black is winning
+        else:
+            # Convert centipawns to a more readable format
+            cp_score = score.score() / 100.0  # Convert to pawns
+            return cp_score
+            
+    except Exception as e:
+        print(f"Error evaluating position: {e}")
+        return 0.0  # Return draw if evaluation fails
+
 def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, stockfish_depth=10):
     """
     Play a full game between LLM and opponent with move-by-move output.
+    Game truncates after 50 moves (25 per side) and winner is decided by Stockfish evaluation.
     
     Args:
         opponent: "stockfish" or "random"
@@ -115,7 +149,7 @@ def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, 
     engine = None
     if opponent == "stockfish":
         try:
-            engine = chess.engine.SimpleEngine.popen_uci("/usr/local/bin/stockfish")
+            engine = chess.engine.SimpleEngine.popen_uci(os.getenv("STOCKFISH_PATH",'/usr/local/bin/stockfish'))
             engine.configure({"Skill Level": 10, "Depth": stockfish_depth})
         except:
             try:
@@ -133,15 +167,17 @@ def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, 
     
     board = chess.Board()
     move_count = 1
+    max_moves = 50  # 25 moves per side
     
     print("=" * 60)
     print(f"CHESS GAME: {'LLM (White) vs ' + opponent_name + ' (Black)' if llm_is_white else opponent_name + ' (White) vs LLM (Black)'}")
+    print(f"Game will truncate after {max_moves} moves if not finished")
     print("=" * 60)
     print(f"Starting position:\n{board}")
     print()
     
     try:
-        while not board.is_game_over() and move_count <= 100:  # Limit to 100 moves
+        while not board.is_game_over() and len(board.move_stack) < max_moves:
             current_player_is_llm = (board.turn == chess.WHITE) == llm_is_white
             
             if current_player_is_llm:
@@ -184,27 +220,44 @@ def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, 
         print("GAME OVER")
         print("=" * 60)
         
-        result = board.result()
-        if result == "1-0":
-            winner = "White"
-        elif result == "0-1":
-            winner = "Black"
+        # Determine game result
+        if len(board.move_stack) >= max_moves and not board.is_game_over():
+            # Game truncated - use Stockfish evaluation
+            print(f"Game truncated after {max_moves} moves. Using Stockfish evaluation...")
+            eval_score = evaluate_position_with_stockfish(board)
+            print(f"Stockfish evaluation: {eval_score:.2f} (positive favors White)")
+            
+            if eval_score > 0.5:  # White is winning
+                result = "1-0"
+                winner = "White (by evaluation)"
+            elif eval_score < -0.5:  # Black is winning
+                result = "0-1"
+                winner = "Black (by evaluation)"
+            else:  # Close to equal
+                result = "1/2-1/2"
+                winner = "Draw (by evaluation)"
+                
+            print(f"Game ended by move limit and evaluation")
         else:
-            winner = "Draw"
+            # Normal game end
+            result = board.result()
+            if result == "1-0":
+                winner = "White"
+            elif result == "0-1":
+                winner = "Black"
+            else:
+                winner = "Draw"
+            
+            if board.is_checkmate():
+                print("Game ended by checkmate")
+            elif board.is_stalemate():
+                print("Game ended by stalemate")
+            elif board.is_insufficient_material():
+                print("Game ended by insufficient material")
+            elif board.can_claim_draw():
+                print("Game ended by draw claim")
         
         print(f"Result: {result} ({winner})")
-        
-        if board.is_checkmate():
-            print("Game ended by checkmate")
-        elif board.is_stalemate():
-            print("Game ended by stalemate")
-        elif board.is_insufficient_material():
-            print("Game ended by insufficient material")
-        elif board.can_claim_draw():
-            print("Game ended by draw claim")
-        elif move_count > 100:
-            print("Game ended by move limit")
-        
         print(f"Final position:\n{board}")
         print(f"Total moves played: {len(board.move_stack)}")
         
