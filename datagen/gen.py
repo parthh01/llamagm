@@ -366,17 +366,12 @@ def prune_openings(opening_trajectories, white_engine_params, black_engine_progr
 def generate_grpo_games(model, tokenizer, env, num_games: int = 100, max_moves_per_game: int = 50) -> List[Dict]:
     """
     Generate training data by having the model play games against Stockfish.
-    Returns list of training examples with prompts, responses, and rewards.
+    Returns list of training examples with prompts and completions (no rewards).
     """
     game_data = []
     
     for game_idx in tqdm(range(num_games), desc="Generating GRPO games"):
         board = chess.Board()
-        game_moves = []
-        game_rewards = []
-        game_prompts = []
-        game_responses = []
-        
         move_count = 0
         
         while not board.is_game_over() and move_count < max_moves_per_game:
@@ -416,14 +411,14 @@ def generate_grpo_games(model, tokenizer, env, num_games: int = 100, max_moves_p
                 response = tokenizer.decode(outputs[0], skip_special_tokens=True)
                 model_response = response.split("[/INST]")[1].strip()
                 
-                # Calculate reward for this move
-                board_copy = board.copy()
-                reward, info = env.calculate_reward(board_copy, model_response)
-                
-                # Store the training example
-                game_prompts.append(prompt)
-                game_responses.append(model_response)
-                game_rewards.append(reward)
+                # Store the training example (prompt and completion only)
+                game_data.append({
+                    "prompt": prompt,
+                    "completion": model_response,
+                    "board_state": board.fen(),  # Store board state for reward calculation
+                    "game_id": game_idx,
+                    "move_number": move_count + 1
+                })
                 
                 # Try to make the move if it's legal
                 try:
@@ -433,22 +428,18 @@ def generate_grpo_games(model, tokenizer, env, num_games: int = 100, max_moves_p
                         if move_str in legal_moves_san:
                             move = board.parse_san(move_str)
                             board.push(move)
-                            game_moves.append(move)
                         else:
                             # Illegal move, make a random legal move to continue
                             random_move = np.random.choice(list(board.legal_moves))
                             board.push(random_move)
-                            game_moves.append(random_move)
                     else:
                         # Invalid JSON, make a random legal move to continue
                         random_move = np.random.choice(list(board.legal_moves))
                         board.push(random_move)
-                        game_moves.append(random_move)
                 except Exception as e:
                     # Any error, make a random legal move
                     random_move = np.random.choice(list(board.legal_moves))
                     board.push(random_move)
-                    game_moves.append(random_move)
                 
             else:  # Black's turn (Stockfish)
                 stockfish = env.get_stockfish()
@@ -458,30 +449,11 @@ def generate_grpo_games(model, tokenizer, env, num_games: int = 100, max_moves_p
                 if best_move_uci:
                     move = chess.Move.from_uci(best_move_uci)
                     board.push(move)
-                    game_moves.append(move)
                 else:
                     # Stockfish couldn't find a move, game over
                     break
             
             move_count += 1
-        
-        # Calculate final game outcome reward
-        game_outcome_reward = env.get_game_outcome_reward(board, move_count >= max_moves_per_game)
-        
-        # Add game outcome reward to the last move's reward
-        if game_rewards:
-            game_rewards[-1] += game_outcome_reward
-        
-        # Create training examples from this game
-        for i, (prompt, response, reward) in enumerate(zip(game_prompts, game_responses, game_rewards)):
-            game_data.append({
-                "query": prompt,
-                "response": response,
-                "reward": reward,
-                "game_id": game_idx,
-                "move_number": i + 1,
-                "final_outcome": game_outcome_reward
-            })
     
     return game_data
 

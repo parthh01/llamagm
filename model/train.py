@@ -1,6 +1,7 @@
 import torch
 import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
+from datasets import load_dataset
 from trl import SFTTrainer,SFTConfig
 from peft import LoraConfig, get_peft_model
 from dotenv import load_dotenv

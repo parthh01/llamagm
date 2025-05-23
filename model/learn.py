@@ -302,6 +302,32 @@ class ChessGRPOTrainer:
         
         return Dataset.from_list(game_data)
     
+    def chess_reward_function(self, completions: List[str], **kwargs) -> List[float]:
+        """
+        Reward function for GRPO training.
+        Takes completions and returns rewards for each.
+        """
+        rewards = []
+        
+        # Get the current batch of board states from kwargs
+        board_states = kwargs.get('board_states', [])
+        
+        if len(board_states) != len(completions):
+            # Fallback: create dummy boards if states not provided
+            board_states = [chess.Board() for _ in completions]
+        
+        for completion, board_state in zip(completions, board_states):
+            try:
+                # Calculate reward using our existing environment
+                reward, _ = self.env.calculate_reward(board_state, completion)
+                rewards.append(reward)
+            except Exception as e:
+                # Fallback reward for any errors
+                print(f"Error calculating reward: {e}")
+                rewards.append(-10.0)  # Large negative reward for errors
+        
+        return rewards
+    
     def train(self, num_iterations: int = 10, games_per_iteration: int = 100):
         """Main training loop"""
         for iteration in range(num_iterations):
@@ -311,12 +337,13 @@ class ChessGRPOTrainer:
             print("Generating game data...")
             dataset = self.generate_game_data(games_per_iteration)
             
-            # Create GRPO trainer
+            # Create GRPO trainer with reward function
             trainer = GRPOTrainer(
-                config=self.grpo_config,
                 model=self.model,
-                tokenizer=self.tokenizer,
+                args=self.grpo_config,
                 train_dataset=dataset,
+                reward_funcs=self.chess_reward_function,
+                tokenizer=self.tokenizer,
             )
             
             # Train for one iteration
