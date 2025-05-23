@@ -247,7 +247,8 @@ class ChessGRPOTrainer:
         self.grpo_config = GRPOConfig(
             output_dir=output_dir,
             learning_rate=1e-5,
-            logging_steps=10
+            logging_steps=10,
+            fp16=True
         )
     
     def _load_peft_model(self, model_path: str):
@@ -257,13 +258,13 @@ class ChessGRPOTrainer:
             peft_config = PeftConfig.from_pretrained(model_path)
             base_model = AutoModelForCausalLM.from_pretrained(
                 peft_config.base_model_name_or_path,
-                device_map="auto",
-                torch_dtype=torch.float16
+                device_map="auto"
             )
             model = PeftModel.from_pretrained(base_model, model_path)
             
             # Merge and unload for GRPO training (GRPO needs a regular model, not PEFT)
             model = model.merge_and_unload()
+            model = model.bfloat16()
             
             # IMPORTANT: Enable gradients for all parameters after merge_and_unload
             for param in model.parameters():
