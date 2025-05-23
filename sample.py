@@ -4,6 +4,7 @@ import json
 import torch 
 import chess
 import chess.engine
+import random
 from constants import system_prompt
 
 model_name = "./open_llama_7b-lora-final"
@@ -15,6 +16,20 @@ model = AutoModelForCausalLM.from_pretrained(
     device_map="auto",
     offload_folder="./offload_folder",
 )
+
+def get_random_move(board):
+    """Get a random legal move."""
+    try:
+        legal_moves = list(board.legal_moves)
+        if legal_moves:
+            move = random.choice(legal_moves)
+            move_san = board.san(move)
+            return move, move_san
+        else:
+            return None, "NO_LEGAL_MOVES"
+    except Exception as e:
+        print(f"Random player error: {e}")
+        return None, "ERROR"
 
 def get_llm_move(board):
     """Get a move from the LLM given the current board position."""
@@ -85,26 +100,42 @@ def get_stockfish_move(board, engine, time_limit=1.0):
         print(f"Stockfish error: {e}")
         return None, "ERROR"
 
-def play_full_game(llm_is_white=True, stockfish_time=1.0, stockfish_depth=10):
-    """Play a full game between LLM and Stockfish with move-by-move output."""
+def play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, stockfish_depth=10):
+    """
+    Play a full game between LLM and opponent with move-by-move output.
     
-    # Initialize Stockfish engine
-    try:
-        engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")  # Adjust path as needed
-        engine.configure({"Skill Level": 10})
-    except:
+    Args:
+        opponent: "stockfish" or "random"
+        llm_is_white: Whether LLM plays as white
+        stockfish_time: Time limit for Stockfish moves (only used if opponent="stockfish")
+        stockfish_depth: Depth setting for Stockfish (only used if opponent="stockfish")
+    """
+    
+    # Initialize opponent
+    engine = None
+    if opponent == "stockfish":
         try:
-            engine = chess.engine.SimpleEngine.popen_uci("stockfish")  # Try without path
+            engine = chess.engine.SimpleEngine.popen_uci("/usr/local/bin/stockfish")
             engine.configure({"Skill Level": 10, "Depth": stockfish_depth})
-        except Exception as e:
-            print(f"Could not initialize Stockfish: {e}")
-            return
+        except:
+            try:
+                engine = chess.engine.SimpleEngine.popen_uci("stockfish")
+                engine.configure({"Skill Level": 10, "Depth": stockfish_depth})
+            except Exception as e:
+                print(f"Could not initialize Stockfish: {e}")
+                return
+        opponent_name = "Stockfish"
+    elif opponent == "random":
+        opponent_name = "Random Player"
+    else:
+        print(f"Unknown opponent: {opponent}")
+        return
     
     board = chess.Board()
     move_count = 1
     
     print("=" * 60)
-    print(f"CHESS GAME: {'LLM (White) vs Stockfish (Black)' if llm_is_white else 'Stockfish (White) vs LLM (Black)'}")
+    print(f"CHESS GAME: {'LLM (White) vs ' + opponent_name + ' (Black)' if llm_is_white else opponent_name + ' (White) vs LLM (Black)'}")
     print("=" * 60)
     print(f"Starting position:\n{board}")
     print()
@@ -121,23 +152,25 @@ def play_full_game(llm_is_white=True, stockfish_time=1.0, stockfish_depth=10):
                 
                 if move is None:
                     print("LLM failed to provide valid move. Making random legal move.")
-                    move = list(board.legal_moves)[0]
-                    move_san = board.san(move)
+                    move, move_san = get_random_move(board)
                 
                 print(f"LLM plays: {move_san}")
                 board.push(move)
                 
             else:
-                print(f"Move {move_count}: Stockfish ({'White' if board.turn == chess.WHITE else 'Black'}) to move")
+                print(f"Move {move_count}: {opponent_name} ({'White' if board.turn == chess.WHITE else 'Black'}) to move")
                 print(f"Position: {board.fen()}")
                 
-                move, move_san = get_stockfish_move(board, engine, stockfish_time)
+                if opponent == "stockfish":
+                    move, move_san = get_stockfish_move(board, engine, stockfish_time)
+                elif opponent == "random":
+                    move, move_san = get_random_move(board)
                 
                 if move is None:
-                    print("Stockfish failed to provide move!")
+                    print(f"{opponent_name} failed to provide move!")
                     break
                 
-                print(f"Stockfish plays: {move_san}")
+                print(f"{opponent_name} plays: {move_san}")
                 board.push(move)
             
             print(f"Board after move:\n{board}")
@@ -197,16 +230,23 @@ def play_full_game(llm_is_white=True, stockfish_time=1.0, stockfish_depth=10):
     except Exception as e:
         print(f"Error during game: {e}")
     finally:
-        engine.quit()
+        if engine:
+            engine.quit()
 
 if __name__ == "__main__":
-    # Play a game with LLM as white
-    print("Playing game with LLM as White...")
-    play_full_game(llm_is_white=True, stockfish_time=1.0, stockfish_depth=10)
+    # Play a game with LLM as white against random player
+    print("Playing game with LLM as White vs Random Player...")
+    play_full_game(opponent="random", llm_is_white=True)
     
     print("\n" + "="*80 + "\n")
     
-    # Uncomment to play another game with LLM as black
-    # print("Playing game with LLM as Black...")
-    # play_full_game(llm_is_white=False, stockfish_time=1.0, stockfish_depth=10)
+    # # Play a game with LLM as white against Stockfish
+    # print("Playing game with LLM as White vs Stockfish...")
+    # play_full_game(opponent="stockfish", llm_is_white=True, stockfish_time=1.0, stockfish_depth=10)
+    
+    # print("\n" + "="*80 + "\n")
+    
+    # Uncomment to play more games
+    # print("Playing game with LLM as Black vs Random Player...")
+    # play_full_game(opponent="random", llm_is_white=False)
 
