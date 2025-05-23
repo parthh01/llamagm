@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from stockfish import Stockfish
 import threading
 import re
-from datagen.gen import progressive_stockfish_training
+from datagen.gen import progressive_stockfish_training, generate_grpo_games
 import argparse
 load_dotenv()
 
@@ -247,17 +247,7 @@ class ChessGRPOTrainer:
         self.grpo_config = GRPOConfig(
             output_dir=output_dir,
             learning_rate=1e-5,
-            batch_size=8,
-            mini_batch_size=2,
-            gradient_accumulation_steps=4,
-            optimize_cuda_cache=True,
-            early_stopping=False,
-            target_kl=0.1,
-            ppo_epochs=4,
-            max_grad_norm=1.0,
-            use_score_scaling=True,
-            use_score_norm=True,
-            score_clip=5.0,
+            logging_steps=10
         )
     
     def _load_peft_model(self, model_path: str):
@@ -300,7 +290,6 @@ class ChessGRPOTrainer:
     
     def generate_game_data(self, num_games: int = 100) -> Dataset:
         """Generate training data by playing games"""
-        from datagen.gen import generate_grpo_games
         
         # Generate games using the current model
         game_data = generate_grpo_games(

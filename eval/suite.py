@@ -137,8 +137,7 @@ class ChessGauntlet:
             try:
                 # Create a strong Stockfish instance for evaluation
                 evaluator = StockfishPlayer({"Skill Level": 20, "Threads": 1,"Depth": 10})
-                with evaluator.lock:
-                    eval_score = evaluator.evaluate_position(board)
+                eval_score = evaluator.evaluate_position(board)
                 
                 # Positive score favors white, negative favors black
                 if eval_score > 0.5:  # White is winning
@@ -373,7 +372,7 @@ if __name__ == "__main__":
     #player = RandomPlayer()
     #player = StockfishPlayer(stockfish_skill_elo_map[1700])
     # Create and run the gauntlet
-    gauntlet = ChessGauntlet(player, games_per_level=1, starting_elo=800, num_threads=4)
+    gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
     results = gauntlet.run_gauntlet()
     
     # Plot results

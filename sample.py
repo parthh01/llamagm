@@ -110,12 +110,12 @@ def evaluate_position_with_stockfish(board, depth=15):
     """Evaluate the current position using Stockfish and return a score."""
     try:
         # Create a temporary strong Stockfish instance for evaluation
-        eval_params = {"Skill Level": 20, "Threads": 1}
+        eval_params = {"Skill Level": 20, "Threads": 1, "Depth": 15}
         
         evaluator = StockfishPlayer(eval_params)
         
-        with evaluator.lock:
-            eval_score = evaluator.evaluate_position(board)
+        eval_score = evaluator.evaluate_position(board)
+        print(f"Stockfish evaluation: {eval_score:.2f} (positive favors White)")
         
         return eval_score
             
@@ -283,8 +283,8 @@ if __name__ == "__main__":
     print("\n" + "="*80 + "\n")
     
     # Play a game with LLM as white against Stockfish
-    print("Playing game with LLM as White vs Stockfish...")
-    play_full_game(opponent="stockfish", llm_is_white=True, stockfish_elo=1250)
+    #print("Playing game with LLM as White vs Stockfish...")
+    #play_full_game(opponent="stockfish", llm_is_white=True, stockfish_elo=1250)
     
     print("\n" + "="*80 + "\n")
     
