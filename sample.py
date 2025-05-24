@@ -12,7 +12,8 @@ load_dotenv()
 # Import the StockfishPlayer from eval module
 from eval.players import StockfishPlayer, stockfish_skill_elo_map
 
-model_name = "./open_llama_7b-lora-final"
+#model_name = "./open_llama_7b-lora-final"
+model_name = "./chess-grpo-output/checkpoint-150"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
