@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from stockfish import Stockfish
 import threading
 import re
-from datagen.gen import progressive_stockfish_training, generate_grpo_games
+from datagen.gen import generate_grpo_games
 import argparse
 load_dotenv()
 
@@ -22,7 +22,8 @@ load_dotenv()
 class ChessReward:
     """Reward structure for chess moves"""
     json_parse_reward: float = -10.0  # Large negative for invalid JSON
-    illegal_move_reward: float = -5.0  # Smaller negative for illegal moves
+    illegal_move_reward: float = -0.1  # Very weakly negative for illegal moves
+    valid_move_reward: float = 0.1    # Very weakly positive for legal moves
     value_parse_reward: float = -1.0   # Small negative for unparseable value
     value_accuracy_weight: float = 0.01  # Weight for value estimation accuracy
     position_improvement_weight: float = 2.0  # Weight for position improvement
@@ -122,14 +123,39 @@ class ChessGRPOEnvironment:
         else:
             return eval_after < eval_before
     
-    def calculate_reward(self, board: chess.Board, model_output: str, 
-                        move_made: Optional[chess.Move] = None) -> Tuple[float, Dict]:
+    def calculate_reward(self, board: chess.Board, model_output: str, prompt: str = None) -> Tuple[float, Dict]:
         """
         Calculate reward for a model output given the board state.
         Returns: (reward, info_dict)
         """
         info = {}
         reward = 0.0
+        
+        # Check if this is one of the first 2 white moves (opening moves we don't want to modify)
+        move_history = [] 
+        # Parse move history from prompt to determine LLM move count
+        if prompt:
+            try:
+                # Extract JSON from prompt - find the last occurrence of {"moveHistory"
+                json_start = prompt.rfind('{"moveHistory"')
+                if json_start != -1:
+                    # Find the first } after the json_start to close the JSON object
+                    json_end = prompt.find('}', json_start) + 1
+                    if json_end > json_start:
+                        json_str = prompt[json_start:json_end]
+                        position_data = json.loads(json_str)
+                        move_history = position_data.get("moveHistory", [])
+                        info['move_history_length'] = len(move_history)
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                info['prompt_parse_error'] = str(e)
+                # Fallback to using board state
+        is_white_move = board.turn
+        llm_move_count = len(move_history)
+        # Skip rewarding first 2 white moves (LLM moves 0 and 1 when playing white)
+        if is_white_move and llm_move_count <= 3:
+            info['opening_move_skipped'] = True
+            info['move_number'] = llm_move_count
+            return 0.0, info
         
         # Parse model output
         move_str, reasoning, is_valid_json = self.parse_model_output(model_output)
@@ -148,6 +174,7 @@ class ChessGRPOEnvironment:
         legal_moves_san = [board.san(move) for move in legal_moves]
         
         if move_str not in legal_moves_san:
+            # Very weakly negative for illegal moves (but valid JSON)
             reward += self.reward_config.illegal_move_reward
             info['illegal_move_penalty'] = self.reward_config.illegal_move_reward
             return reward, info
@@ -156,6 +183,9 @@ class ChessGRPOEnvironment:
         try:
             move = board.parse_san(move_str)
             info['move'] = move
+            # Very weakly positive for legal moves
+            reward += self.reward_config.valid_move_reward
+            info['valid_move_reward'] = self.reward_config.valid_move_reward
         except ValueError:
             reward += self.reward_config.illegal_move_reward
             info['move_parse_error'] = True
@@ -171,30 +201,47 @@ class ChessGRPOEnvironment:
         
         # Make the move and evaluate position
         board_before = board.copy()
-        is_white_move = board.turn
         board.push(move)
         
-        # Get actual Stockfish evaluation after move
-        actual_value = self.get_stockfish_evaluation(board)
-        info['actual_value'] = actual_value
+        # Get actual Stockfish evaluation before and after move
+        eval_before = self.get_stockfish_evaluation(board_before)
+        eval_after = self.get_stockfish_evaluation(board)
+        info['eval_before'] = eval_before
+        info['eval_after'] = eval_after
         
-        # Reward for value estimation accuracy
+        # Calculate evaluation delta (improvement for the moving player)
+        if is_white_move:
+            eval_delta = eval_after - eval_before  # Positive is good for white
+        else:
+            eval_delta = eval_before - eval_after  # Positive is good for black
+        
+        info['eval_delta'] = eval_delta
+        
+        # Reward for position improvement based on evaluation delta
+        # Scale the delta to make it a reasonable reward magnitude
+        position_reward = eval_delta * self.reward_config.position_improvement_weight / 100.0
+        reward += position_reward
+        info['position_reward'] = position_reward
+        
+        # Reward for value estimation accuracy (only if we have an estimate)
         if estimated_value is not None:
-            value_error = abs(estimated_value - actual_value)
-            # Reward decreases with error, max reward when error is 0
-            value_accuracy_reward = max(0, 100 - value_error) * self.reward_config.value_accuracy_weight
+            # Adjust estimated value for player perspective
+            if not is_white_move:
+                estimated_value = -estimated_value
+            
+            # Compare with actual evaluation after move
+            value_error = abs(estimated_value - eval_after)
+            # Reward decreases with error, scaled appropriately
+            value_accuracy_reward = max(0, 200 - value_error) * self.reward_config.value_accuracy_weight
             reward += value_accuracy_reward
             info['value_accuracy_reward'] = value_accuracy_reward
+            info['value_error'] = value_error
         
-        # Reward for position improvement
-        if self.is_position_improving(board_before, board, is_white_move):
-            improvement_reward = self.reward_config.position_improvement_weight
-            reward += improvement_reward
-            info['improvement_reward'] = improvement_reward
-        else:
-            improvement_penalty = -self.reward_config.position_improvement_weight / 2
-            reward += improvement_penalty
-            info['improvement_penalty'] = improvement_penalty
+        # Additional reward for strong moves (high absolute evaluation)
+        # This rewards moves that lead to clearly advantageous positions
+        strength_bonus = min(abs(eval_after) / 100.0, 5.0) * 0.1  # Cap at 0.5 bonus
+        reward += strength_bonus
+        info['strength_bonus'] = strength_bonus
         
         info['total_reward'] = reward
         return reward, info
@@ -212,7 +259,7 @@ class ChessGRPOEnvironment:
         elif max_moves_reached:
             # Determine winner by Stockfish evaluation
             final_eval = self.get_stockfish_evaluation(board)
-            if abs(final_eval) < 50:  # Close game, call it a draw
+            if abs(final_eval) < 2:  # Close game, call it a draw
                 return self.reward_config.draw_reward
             elif final_eval > 0:  # White advantage
                 return self.reward_config.win_reward
@@ -355,12 +402,12 @@ class ChessGRPOTrainer:
         
         if len(board_states) != len(completions): raise ValueError("Number of board states and completions must match")
         
-        for completion, fen_string in zip(completions, board_states):
+        for completion, fen_string, prompt in zip(completions, board_states,kwargs.get('prompts')):
             try:
                 # Construct chess board from FEN string
                 board_state = chess.Board(fen_string)
                 # Calculate reward using our existing environment
-                reward, _ = self.env.calculate_reward(board_state, completion)
+                reward, _ = self.env.calculate_reward(board_state, completion, prompt)
                 rewards.append(reward)
             except Exception as e:
                 # Fallback reward for any errors
@@ -436,6 +483,39 @@ def parse_args():
                        help="LoRA alpha parameter")
     
     return parser.parse_args()
+
+def progressive_stockfish_training(model_path: str, output_dir: str, iterations: int = 10):
+    """
+    Progressive training against increasingly difficult Stockfish opponents
+    """
+    
+    # Stockfish skill progression
+    skill_levels = [1,3, 6, 9, 11, 14, 17, 20]
+    
+    current_model_path = model_path
+    
+    for i, skill_level in enumerate(skill_levels):
+        if i >= iterations:
+            break
+            
+        print(f"Training iteration {i+1}: Stockfish skill level {skill_level}")
+        
+        trainer = ChessGRPOTrainer(
+            model_name=current_model_path,
+            output_dir=f"{output_dir}/skill_{skill_level}",
+            stockfish_skill_level=skill_level
+        )
+        
+        # Train for a few iterations at this skill level
+        trainer.train(num_iterations=3, games_per_iteration=50)
+        
+        # Update model path for next iteration
+        # After GRPO training, the model is saved as a regular model, not PEFT
+        current_model_path = f"{output_dir}/skill_{skill_level}/final"
+        
+        print(f"Completed training against skill level {skill_level}")
+    
+    print("Progressive training completed!")
 
 def main():
     args = parse_args()
