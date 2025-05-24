@@ -548,4 +548,26 @@ def main():
     print("GRPO training completed!")
 
 if __name__ == "__main__":
-    main()
+    #main()
+    trainer = ChessGRPOTrainer(
+        model_name="gpt2",
+        output_dir="./chess-grpo-output",
+        stockfish_skill_level=3,
+        load_in_8bit=True
+    )
+    prompts = [
+        "{\"moveHistory\": [\"e4\", \"e5\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\"]}",
+    ]
+    completions = [
+        "{\"move\": \"Ke2\", \"reasoning\": \"eval: 100\"}", 
+        "{\"move\": \"d4\", \"reasoning\": \"eval: 100\"}",
+        "{\"move\": \"c5\", \"reasoning\": \"eval: 100\"}",
+        "{\"move\": \"cxd4\", \"reasoning\": \"eval: 100\"}",
+        "{\"move\": dkfndkajnfkdjan",
+        "{\"move\": \"Ke2\', \"reasoning\": \"eval: 100\"}"
+
+    ]
+    trainer.chess_reward_function(completions, prompts)
