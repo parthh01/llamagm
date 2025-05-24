@@ -21,6 +21,12 @@ stockfish_skill_elo_map = {
     2000: {"Skill Level": 20, "Threads": 1,"Depth": 10}
 }
 
+class IllegalMoveError(Exception):
+    """Exception raised for illegal moves."""
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
 class BasePlayer(ABC):
     @abstractmethod
     def get_move(self, board: chess.Board, time_left: int) -> chess.Move:
@@ -134,7 +140,7 @@ class LLMPlayer(BasePlayer):
         # Check if the move is in the list of legal moves
         legal_moves_san = [board.san(move) for move in board.legal_moves]
         if move_str not in legal_moves_san:
-            raise ValueError(f"Illegal move suggested by LLM: {move_str}")
+            raise IllegalMoveError(f"Illegal move suggested by LLM: {move_str}")
             
         return board.parse_san(response_json["move"])
 

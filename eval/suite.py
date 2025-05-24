@@ -5,7 +5,7 @@ from typing import List, Dict, Tuple, Optional
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import numpy as np
-from eval.players import BasePlayer, RandomPlayer, StockfishPlayer,LLMPlayer, stockfish_skill_elo_map
+from eval.players import BasePlayer, RandomPlayer, StockfishPlayer,LLMPlayer, stockfish_skill_elo_map, IllegalMoveError
 import concurrent.futures
 import threading
 from dotenv import load_dotenv 
@@ -30,7 +30,6 @@ class ChessGauntlet:
         self.invalid_moves = 0
         self.illegal_moves = 0
         self.total_moves = 0
-        self.stockfish_levels = sorted(stockfish_skill_elo_map.keys())
         self.num_threads = min(num_threads, games_per_level)  # Can't use more threads than games
         self.elo_lock = threading.Lock()  # Lock for updating ELO safely
         self.player_lock = threading.Lock()  # Lock for accessing the player safely
@@ -79,9 +78,12 @@ class ChessGauntlet:
                             try:
                                 move = self.player.get_move(board, time_limit)
                             except Exception as e:
-
-                                print(f"Error during move generation: {e} defaulting to random move")
-                                invalid_moves += 1
+                                if isinstance(e, IllegalMoveError):
+                                    print(f"illegal move suggested by player: {e} defaulting to random move")
+                                    illegal_moves += 1
+                                else:
+                                    print(f"Error during move generation: {e} defaulting to random move")
+                                    invalid_moves += 1
                                 move = RandomPlayer().get_move(board, time_limit)
                         # Check if move is legal
                         if move not in board.legal_moves:
@@ -97,26 +99,14 @@ class ChessGauntlet:
                     # Also add timeout for opponent moves
                     current_timeout = stockfish_timeout if isinstance(opponent, StockfishPlayer) else move_timeout
                     try:
-                        # If opponent is Stockfish, use its lock
-                        if isinstance(opponent, StockfishPlayer) and hasattr(opponent, 'lock'):
-                            with opponent.lock:
-                                with concurrent.futures.ThreadPoolExecutor() as executor:
-                                    future = executor.submit(current_player.get_move, board, time_limit)
-                                    try:
-                                        move = future.result(timeout=current_timeout)
-                                    except concurrent.futures.TimeoutError:
-                                        print(f"Opponent move generation timed out after {current_timeout} seconds (position: {board.fen()})")
-                                        # If timeout, make a random legal move instead
-                                        move = RandomPlayer().get_move(board, time_limit)
-                        else:
-                            with concurrent.futures.ThreadPoolExecutor() as executor:
-                                future = executor.submit(current_player.get_move, board, time_limit)
-                                try:
-                                    move = future.result(timeout=current_timeout)
-                                except concurrent.futures.TimeoutError:
-                                    print(f"Opponent move generation timed out after {current_timeout} seconds (position: {board.fen()})")
-                                    # If timeout, make a random legal move instead
-                                    move = RandomPlayer().get_move(board, time_limit)
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(current_player.get_move, board, time_limit)
+                            try:
+                                move = future.result(timeout=current_timeout)
+                            except concurrent.futures.TimeoutError:
+                                print(f"Opponent move generation timed out after {current_timeout} seconds (position: {board.fen()})")
+                                # If timeout, make a random legal move instead
+                                move = RandomPlayer().get_move(board, time_limit)
                     except Exception as e:
                         print(f"Error during opponent move generation: {e}")
                         move = RandomPlayer().get_move(board, time_limit)
@@ -228,7 +218,7 @@ class ChessGauntlet:
         
         return win_rate > 0.5
     
-    def run_gauntlet(self) -> Dict:
+    def run_gauntlet(self,levels) -> Dict:
         """Run the full gauntlet evaluation."""
         results = {
             "final_elo": self.player_elo,
@@ -248,9 +238,9 @@ class ChessGauntlet:
         self.elo_history.append(self.player_elo)
         
         # Run through each Stockfish level
-        for level_idx, stockfish_elo in enumerate(self.stockfish_levels):
-            print(f"\nEvaluating against Stockfish (ELO: {stockfish_elo})...")
-            stockfish_params = stockfish_skill_elo_map[stockfish_elo]
+        for level_idx, level in enumerate(levels):
+            opp_elo,opp = level
+            print(f"\nEvaluating against Opponent of (ELO: {opp_elo})...")
             
             wins = 0
             draws = 0
@@ -261,8 +251,6 @@ class ChessGauntlet:
             
             # Create a thread pool
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.num_threads) as executor:
-                # Create a separate Stockfish instance for each thread
-                stockfish_players = [StockfishPlayer(stockfish_params) for _ in range(self.num_threads)]
                 
                 # Prepare arguments for each game
                 game_args = []
@@ -270,7 +258,7 @@ class ChessGauntlet:
                     player_is_white = i % 2 == 0
                     # Use the appropriate Stockfish instance based on thread index
                     stockfish_idx = i % self.num_threads
-                    game_args.append((stockfish_players[stockfish_idx], stockfish_elo, player_is_white, self.player_elo))
+                    game_args.append((opp, opp_elo, player_is_white, self.player_elo))
                 
                 # Execute games in parallel and collect results
                 futures = [executor.submit(self.play_game_thread, args) for args in game_args]
@@ -303,7 +291,7 @@ class ChessGauntlet:
             illegal_pct = (level_illegal / level_moves) * 100 if level_moves > 0 else 0
             
             # Store detailed results for this level
-            results["level_results"][stockfish_elo] = {
+            results["level_results"][opp_elo] = {
                 "wins": wins,
                 "draws": draws,
                 "losses": losses,
@@ -312,18 +300,18 @@ class ChessGauntlet:
                 "illegal_move_pct": illegal_pct
             }
             
-            print(f"Results against Stockfish ELO {stockfish_elo}:")
+            print(f"Results against Opponent ELO {opp_elo}:")
             print(f"Wins: {wins}, Draws: {draws}, Losses: {losses}")
             print(f"Win rate: {win_rate:.2f}")
             print(f"Current player ELO: {self.player_elo}")
             print(f"Invalid moves: {invalid_pct:.2f}%")
             print(f"Illegal moves: {illegal_pct:.2f}%")
             
-            results["highest_level_reached"] = stockfish_elo
+            results["highest_level_reached"] = opp_elo
             
             # Stop if win rate is below 50%
             if win_rate < 0.5:
-                print(f"Player failed to achieve >50% win rate against Stockfish ELO {stockfish_elo}.")
+                print(f"Player failed to achieve >50% win rate against Opponent ELO {opp_elo}.")
                 break
             
             # If this is the last level and player passed, note that they completed the gauntlet
@@ -351,14 +339,14 @@ class ChessGauntlet:
         
         # Print summary of results
         print(f"Final ELO: {results['final_elo']}")
-        print(f"Highest level reached: Stockfish ELO {results['highest_level_reached']}")
+        print(f"Highest level reached: Opponent ELO {results['highest_level_reached']}")
         print(f"Invalid move percentage: {results['invalid_move_pct']:.2f}%")
         print(f"Illegal move percentage: {results['illegal_move_pct']:.2f}%")
         
         # Print detailed breakdown by level
         print("\nDetailed results by level:")
         for elo, level_result in results["level_results"].items():
-            print(f"\nStockfish ELO {elo}:")
+            print(f"\nOpponent ELO {elo}:")
             print(f"  Wins: {level_result['wins']}, Draws: {level_result['draws']}, Losses: {level_result['losses']}")
             print(f"  Win rate: {level_result['win_rate']:.2f}")
             print(f"  Invalid moves: {level_result['invalid_move_pct']:.2f}%")
@@ -372,8 +360,11 @@ if __name__ == "__main__":
     #player = RandomPlayer()
     #player = StockfishPlayer(stockfish_skill_elo_map[1700])
     # Create and run the gauntlet
+    levels = []
+    for elo in sorted(stockfish_skill_elo_map.keys()):
+        levels.append((elo,stockfish_skill_elo_map[elo]))
     gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
-    results = gauntlet.run_gauntlet()
+    results = gauntlet.run_gauntlet(levels)
     
     # Plot results
     gauntlet.plot_elo_progression(results)
