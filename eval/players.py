@@ -109,6 +109,10 @@ class LLMPlayer(BasePlayer):
             model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto")
             tokenizer = AutoTokenizer.from_pretrained(model_path)
         
+        # Fix the padding token issue
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        
         return model, tokenizer
 
     def get_move_history_in_san(self, board: chess.Board) -> list:
@@ -132,6 +136,7 @@ class LLMPlayer(BasePlayer):
         prompt = f"[INST] {system_prompt}\n\n{json.dumps(position_input)} [/INST]" 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
         outputs = self.model.generate(inputs["input_ids"],max_new_tokens=40)
+        assert len(outputs[0]) <= 40, f"LLM response too long: {len(outputs[0])}"
         response = self.tokenizer.decode(outputs[0],skip_special_tokens=True)
         model_response = response.split("[/INST]")[1].strip()
         response_json = json.loads(model_response)
