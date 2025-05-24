@@ -362,7 +362,7 @@ if __name__ == "__main__":
     # Create and run the gauntlet
     levels = []
     for elo in sorted(stockfish_skill_elo_map.keys()):
-        levels.append((elo,stockfish_skill_elo_map[elo]))
+        levels.append((elo,StockfishPlayer(stockfish_skill_elo_map[elo])))
     gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
     results = gauntlet.run_gauntlet(levels)
     
