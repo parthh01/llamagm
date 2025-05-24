@@ -213,30 +213,41 @@ class ChessGRPOEnvironment:
                 best_move_san = board.san(best_move)
                 if move_str == best_move_san:
                     # Significant bonus for playing the best move
-                    best_move_reward = 1.0
+                    best_move_reward = 2.0  # Increased from 1.0
                     info['is_best_move'] = True
                 else:
                     info['is_best_move'] = False
                     info['best_move'] = best_move_san
+                    
+                    # Calculate how much worse this move is compared to the best move
+                    best_board = board.copy()
+                    best_board.push(best_move)
+                    eval_best = self.get_stockfish_evaluation(best_board)
+                    
+                    # Calculate relative move quality (how close to best move)
+                    if is_white_move:
+                        move_diff = eval_best - eval_after  # How much worse than best
+                    else:
+                        move_diff = eval_after - eval_best  # How much worse than best
+                    
+                    # Convert centipawn difference to reward penalty
+                    # Small penalty for moves that are worse than optimal
+                    if move_diff > 0:  # Move is worse than best
+                        relative_penalty = min(1.0, move_diff / 200.0) * 0.5  # Max 0.5 penalty
+                        reward -= relative_penalty
+                        info['relative_move_penalty'] = -relative_penalty
+                    else:
+                        # Move is as good as or better than "best" (shouldn't happen but handle it)
+                        info['relative_move_penalty'] = 0.0
+                        
             except:
                 info['best_move_error'] = True
         
         reward += best_move_reward
         info['best_move_reward'] = best_move_reward
         
-        # Calculate move quality based on evaluation change
-        # For white: positive eval_after is good, for black: negative eval_after is good
-        if is_white_move:
-            # White wants higher evaluations
-            move_quality = eval_after / 100.0  # Scale to reasonable reward range
-        else:
-            # Black wants lower evaluations (more negative)
-            move_quality = -eval_after / 100.0
-        
-        # Cap the move quality reward to prevent extreme values
-        move_quality = max(-2.0, min(2.0, move_quality))
-        reward += move_quality * 0.5  # Scale down the impact
-        info['move_quality_reward'] = move_quality * 0.5
+        # Remove the problematic absolute position evaluation reward
+        # The relative comparison above is much better
         
         # Extract value estimation from reasoning (optional bonus, not penalty)
         estimated_value = self.extract_value_from_reasoning(reasoning)
