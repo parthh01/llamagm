@@ -361,8 +361,9 @@ if __name__ == "__main__":
     #player = StockfishPlayer(stockfish_skill_elo_map[1700])
     # Create and run the gauntlet
     levels = []
-    for elo in sorted(stockfish_skill_elo_map.keys()):
-        levels.append((elo,StockfishPlayer(stockfish_skill_elo_map[elo])))
+    #for elo in sorted(stockfish_skill_elo_map.keys()):
+    #    levels.append((elo,StockfishPlayer(stockfish_skill_elo_map[elo])))
+    levels.append((780,LLMPlayer("./open_llama_7b-lora-final")))
     gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
     results = gauntlet.run_gauntlet(levels)
     
