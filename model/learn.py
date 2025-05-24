@@ -183,7 +183,7 @@ class ChessGRPOEnvironment:
         try:
             move = board.parse_san(move_str)
             info['move'] = move
-            # Very weakly positive for legal moves
+            # Base positive reward for legal moves
             reward += self.reward_config.valid_move_reward
             info['valid_move_reward'] = self.reward_config.valid_move_reward
         except ValueError:
@@ -191,57 +191,71 @@ class ChessGRPOEnvironment:
             info['move_parse_error'] = True
             return reward, info
         
-        # Extract value estimation from reasoning
+        # Get current position evaluation (before move)
+        eval_before = self.get_stockfish_evaluation(board)
+        info['eval_before'] = eval_before
+        
+        # Make the move and evaluate the resulting position
+        board_copy = board.copy()
+        board_copy.push(move)
+        eval_after = self.get_stockfish_evaluation(board_copy)
+        info['eval_after'] = eval_after
+        
+        # Get the best move according to Stockfish for comparison
+        stockfish = self.get_stockfish()
+        stockfish.set_fen_position(board.fen())
+        best_move_uci = stockfish.get_best_move()
+        best_move_reward = 0.0
+        
+        if best_move_uci:
+            try:
+                best_move = chess.Move.from_uci(best_move_uci)
+                best_move_san = board.san(best_move)
+                if move_str == best_move_san:
+                    # Significant bonus for playing the best move
+                    best_move_reward = 1.0
+                    info['is_best_move'] = True
+                else:
+                    info['is_best_move'] = False
+                    info['best_move'] = best_move_san
+            except:
+                info['best_move_error'] = True
+        
+        reward += best_move_reward
+        info['best_move_reward'] = best_move_reward
+        
+        # Calculate move quality based on evaluation change
+        # For white: positive eval_after is good, for black: negative eval_after is good
+        if is_white_move:
+            # White wants higher evaluations
+            move_quality = eval_after / 100.0  # Scale to reasonable reward range
+        else:
+            # Black wants lower evaluations (more negative)
+            move_quality = -eval_after / 100.0
+        
+        # Cap the move quality reward to prevent extreme values
+        move_quality = max(-2.0, min(2.0, move_quality))
+        reward += move_quality * 0.5  # Scale down the impact
+        info['move_quality_reward'] = move_quality * 0.5
+        
+        # Extract value estimation from reasoning (optional bonus, not penalty)
         estimated_value = self.extract_value_from_reasoning(reasoning)
         info['estimated_value'] = estimated_value
         
-        if estimated_value is None:
-            reward += self.reward_config.value_parse_reward
-            info['value_parse_penalty'] = self.reward_config.value_parse_reward
-        
-        # Make the move and evaluate position
-        board_before = board.copy()
-        board.push(move)
-        
-        # Get actual Stockfish evaluation before and after move
-        eval_before = self.get_stockfish_evaluation(board_before)
-        eval_after = self.get_stockfish_evaluation(board)
-        info['eval_before'] = eval_before
-        info['eval_after'] = eval_after
-        
-        # Calculate evaluation delta (improvement for the moving player)
-        if is_white_move:
-            eval_delta = eval_after - eval_before  # Positive is good for white
-        else:
-            eval_delta = eval_before - eval_after  # Positive is good for black
-        
-        info['eval_delta'] = eval_delta
-        
-        # Reward for position improvement based on evaluation delta
-        # Scale the delta to make it a reasonable reward magnitude
-        position_reward = eval_delta * self.reward_config.position_improvement_weight / 100.0
-        reward += position_reward
-        info['position_reward'] = position_reward
-        
-        # Reward for value estimation accuracy (only if we have an estimate)
+        # Only give bonus for value estimation, no penalty for missing/wrong estimates
         if estimated_value is not None:
             # Adjust estimated value for player perspective
+            target_eval = eval_after
             if not is_white_move:
                 estimated_value = -estimated_value
             
-            # Compare with actual evaluation after move
-            value_error = abs(estimated_value - eval_after)
-            # Reward decreases with error, scaled appropriately
-            value_accuracy_reward = max(0, 200 - value_error) * self.reward_config.value_accuracy_weight
-            reward += value_accuracy_reward
-            info['value_accuracy_reward'] = value_accuracy_reward
+            # Give small bonus for reasonable value estimates (within 300 centipawns)
+            value_error = abs(estimated_value - target_eval)
+            if value_error <= 300:
+                value_accuracy_bonus = (300 - value_error) / 300 * 0.2  # Max 0.2 bonus
+                reward += value_accuracy_bonus
+                info['value_accuracy_bonus'] = value_accuracy_bonus
             info['value_error'] = value_error
-        
-        # Additional reward for strong moves (high absolute evaluation)
-        # This rewards moves that lead to clearly advantageous positions
-        strength_bonus = min(abs(eval_after) / 100.0, 5.0) * 0.1  # Cap at 0.5 bonus
-        reward += strength_bonus
-        info['strength_bonus'] = strength_bonus
         
         info['total_reward'] = reward
         return reward, info
