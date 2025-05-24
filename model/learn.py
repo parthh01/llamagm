@@ -58,18 +58,12 @@ class ChessGRPOEnvironment:
         """
         try:
             # Try to find JSON in the output
-            json_match = re.search(r'\{.*\}', output, re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                parsed = json.loads(json_str)
-                move = parsed.get("move")
-                reasoning = parsed.get("reasoning", "")
-                return move, reasoning, True
-            else:
-                print('no json found')
-                print(output)
-                return None, None, False
-        except (json.JSONDecodeError, KeyError):
+            model_response = output.split("[/INST]")[1].strip()
+            parsed = json.loads(model_response)
+            move = parsed.get("move")
+            reasoning = parsed.get("reasoning", "")
+            return move, reasoning, True
+        except (json.JSONDecodeError, KeyError, IndexError):
             print('json decode error')
             print(output)
             return None, None, False
