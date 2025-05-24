@@ -191,85 +191,15 @@ class ChessGRPOEnvironment:
             info['move_parse_error'] = True
             return reward, info
         
-        # Get current position evaluation (before move)
-        eval_before = self.get_stockfish_evaluation(board)
-        info['eval_before'] = eval_before
-        
         # Make the move and evaluate the resulting position
         board_copy = board.copy()
         board_copy.push(move)
         eval_after = self.get_stockfish_evaluation(board_copy)
         info['eval_after'] = eval_after
         
-        # Get the best move according to Stockfish for comparison
-        stockfish = self.get_stockfish()
-        stockfish.set_fen_position(board.fen())
-        best_move_uci = stockfish.get_best_move()
-        best_move_reward = 0.0
-        
-        if best_move_uci:
-            try:
-                best_move = chess.Move.from_uci(best_move_uci)
-                best_move_san = board.san(best_move)
-                if move_str == best_move_san:
-                    # Significant bonus for playing the best move
-                    best_move_reward = 2.0  # Increased from 1.0
-                    info['is_best_move'] = True
-                else:
-                    info['is_best_move'] = False
-                    info['best_move'] = best_move_san
-                    
-                    # Calculate how much worse this move is compared to the best move
-                    best_board = board.copy()
-                    best_board.push(best_move)
-                    eval_best = self.get_stockfish_evaluation(best_board)
-                    
-                    # Calculate relative move quality (how close to best move)
-                    if is_white_move:
-                        move_diff = eval_best - eval_after  # How much worse than best
-                    else:
-                        move_diff = eval_after - eval_best  # How much worse than best
-                    
-                    # Convert centipawn difference to reward penalty
-                    # Small penalty for moves that are worse than optimal
-                    if move_diff > 0:  # Move is worse than best
-                        relative_penalty = min(1.0, move_diff / 200.0) * 0.5  # Max 0.5 penalty
-                        reward -= relative_penalty
-                        info['relative_move_penalty'] = -relative_penalty
-                    else:
-                        # Move is as good as or better than "best" (shouldn't happen but handle it)
-                        info['relative_move_penalty'] = 0.0
-                        
-            except:
-                info['best_move_error'] = True
-        
-        reward += best_move_reward
-        info['best_move_reward'] = best_move_reward
-        
-        # Remove the problematic absolute position evaluation reward
-        # The relative comparison above is much better
-        
-        # Extract value estimation from reasoning (optional bonus, not penalty)
-        estimated_value = self.extract_value_from_reasoning(reasoning)
-        info['estimated_value'] = estimated_value
-        
-        # Only give bonus for value estimation, no penalty for missing/wrong estimates
-        if estimated_value is not None:
-            # Adjust estimated value for player perspective
-            target_eval = eval_after
-            if not is_white_move:
-                estimated_value = -estimated_value
-            
-            # Give small bonus for reasonable value estimates (within 300 centipawns)
-            value_error = abs(estimated_value - target_eval)
-            if value_error <= 300:
-                value_accuracy_bonus = (300 - value_error) / 300 * 0.2  # Max 0.2 bonus
-                reward += value_accuracy_bonus
-                info['value_accuracy_bonus'] = value_accuracy_bonus
-            info['value_error'] = value_error
-        
-        info['total_reward'] = reward
+        reward += eval_after*(-1 if is_white_move else 1)
         return reward, info
+        
     
     def get_game_outcome_reward(self, board: chess.Board, max_moves_reached: bool = False) -> float:
         """Calculate final game outcome reward"""
