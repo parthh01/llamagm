@@ -57,9 +57,7 @@ class ChessGRPOEnvironment:
         Returns: (move, reasoning, is_valid_json)
         """
         try:
-            # Try to find JSON in the output
-            model_response = output.split("[/INST]")[1].strip()
-            parsed = json.loads(model_response)
+            parsed = json.loads(output)
             move = parsed.get("move")
             reasoning = parsed.get("reasoning", "")
             return move, reasoning, True
