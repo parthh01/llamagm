@@ -58,7 +58,7 @@ class ChessGRPOEnvironment:
         Returns: (move, reasoning, is_valid_json)
         """
         try:
-            parsed = json.loads(output[:40])
+            parsed = json.loads(output)
             move = parsed.get("move")
             reasoning = parsed.get("reasoning", "")
             return move, reasoning, True
@@ -456,7 +456,7 @@ class ChessGRPOTrainer:
             if iteration % 3 == 2:  # Every 3 iterations
                 self.env.skill_level = min(20, self.env.skill_level + 2)
                 print(f"Increased Stockfish skill level to {self.env.skill_level}")
-        
+
         print("Training completed!")
         trainer.save_model(f"{self.output_dir}-final")
 
@@ -508,7 +508,7 @@ def progressive_stockfish_training(model_path: str, output_dir: str, iterations:
         )
         
         # Train for a few iterations at this skill level
-        trainer.train(num_iterations=3, games_per_iteration=2)
+        trainer.train(num_iterations=3, games_per_iteration=50)
         
         # Update model path for next iteration
         # After GRPO training, the model is saved as a regular model, not PEFT
