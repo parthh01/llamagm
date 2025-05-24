@@ -550,12 +550,14 @@ def main():
 if __name__ == "__main__":
     #main()
     trainer = ChessGRPOTrainer(
-        model_name="gpt2",
+        model_name="./chess-grpo-output/skill_1/checkpoint-666",
         output_dir="./chess-grpo-output",
         stockfish_skill_level=3,
         load_in_8bit=True
     )
     prompts = [
+        "{\"moveHistory\": [\"e4\", \"e5\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\"]}",
         "{\"moveHistory\": [\"e4\", \"e5\"]}",
         "{\"moveHistory\": [\"e4\", \"e5\"]}",
         "{\"moveHistory\": [\"e4\", \"e5\"]}",
@@ -570,4 +572,12 @@ if __name__ == "__main__":
         "{\"move\": \"Ke2\', \"reasoning\": \"eval: 100\"}"
 
     ]
-    trainer.chess_reward_function(completions, prompts)
+    board_state = [
+        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+    ]
+    trainer.chess_reward_function(completions, prompts=prompts,)
