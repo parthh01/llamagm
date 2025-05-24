@@ -197,7 +197,7 @@ class ChessGRPOEnvironment:
         eval_after = self.get_stockfish_evaluation(board_copy)
         info['eval_after'] = eval_after
         
-        reward += eval_after*(-1 if is_white_move else 1)
+        reward += eval_after*(-1 if is_white_move else 1) #TODO: scale this appropriately
         return reward, info
         
     
