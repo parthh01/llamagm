@@ -556,28 +556,28 @@ if __name__ == "__main__":
         load_in_8bit=True
     )
     prompts = [
-        "{\"moveHistory\": [\"e4\", \"e5\"]}",
-        "{\"moveHistory\": [\"e4\", \"e5\"]}",
-        "{\"moveHistory\": [\"e4\", \"e5\"]}",
-        "{\"moveHistory\": [\"e4\", \"e5\"]}",
-        "{\"moveHistory\": [\"e4\", \"e5\"]}",
-        "{\"moveHistory\": [\"e4\", \"e5\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
     ]
     completions = [
-        "{\"move\": \"Ke2\", \"reasoning\": \"eval: 100\"}", 
+        "{\"move\": \"Ke1\", \"reasoning\": \"eval: 100\"}", 
         "{\"move\": \"d4\", \"reasoning\": \"eval: 100\"}",
-        "{\"move\": \"c5\", \"reasoning\": \"eval: 100\"}",
+        "{\"move\": \"d3\", \"reasoning\": \"eval: 100\"}",
         "{\"move\": \"cxd4\", \"reasoning\": \"eval: 100\"}",
         "{\"move\": dkfndkajnfkdjan",
         "{\"move\": \"Ke2\', \"reasoning\": \"eval: 100\"}"
 
     ]
     board_state = [
-        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
-        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
-        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
-        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
-        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
-        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
     ]
-    trainer.chess_reward_function(completions, prompts=prompts,)
+    trainer.chess_reward_function(completions, prompts=prompts,board_state=board_state)
