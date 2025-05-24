@@ -33,17 +33,7 @@ def get_color(board):
 def generate_reasoning(row, tokenizer):
     """Generate reasoning for the move based on evaluation and description"""
     # Add evaluation information (prioritize this)
-    if row['value'].startswith('M'):
-        mate_in = row['value'][1:]
-        eval_info = f"Mate in {abs(int(mate_in))} for {'White' if int(mate_in) > 0 else 'Black'}."
-    else:
-        eval_value = int(row['value'])
-        if abs(eval_value) < 50:
-            eval_info = f"Position is roughly equal. Eval: {eval_value}"
-        elif eval_value > 0:
-            eval_info = f"White advantage: {eval_value}"
-        else:
-            eval_info = f"Black advantage: {abs(eval_value)}"
+    eval_info = f"eval: {row['value']}"
     
     # Calculate tokens for the JSON structure and move
     completion_template = json.dumps({

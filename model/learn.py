@@ -66,43 +66,43 @@ class ChessGRPOEnvironment:
                 reasoning = parsed.get("reasoning", "")
                 return move, reasoning, True
             else:
+                print('no json found')
+                print(output)
                 return None, None, False
         except (json.JSONDecodeError, KeyError):
+            print('json decode error')
+            print(output)
             return None, None, False
     
     def extract_value_from_reasoning(self, reasoning: str) -> Optional[float]:
         """
         Extract numerical value estimation from reasoning text.
         Returns value in centipawns or None if not found.
+        Format: "eval: {value}" or "M{moves}" where positive is white advantage/mate, negative is black
         """
         if not reasoning:
             return None
-            
-        # Look for patterns like "eval: +150", "advantage: -200", "mate in 3", etc.
-        patterns = [
-            r'eval[:\s]+([+-]?\d+)',
-            r'advantage[:\s]+([+-]?\d+)',
-            r'position[:\s]+([+-]?\d+)',
-            r'([+-]?\d+)\s*centipawn',
-            r'([+-]?\d+)\s*cp',
-        ]
         
-        for pattern in patterns:
-            match = re.search(pattern, reasoning.lower())
-            if match:
-                try:
-                    return float(match.group(1))
-                except ValueError:
-                    continue
+        reasoning = reasoning.strip()
         
-        # Look for mate patterns
-        mate_pattern = r'mate\s+in\s+(\d+)'
-        mate_match = re.search(mate_pattern, reasoning.lower())
+        # Handle mate patterns: M{moves} (e.g., "M5" for mate in 5, "M-3" for mate in -3)
+        mate_pattern = r'^M([+-]?\d+)$'
+        mate_match = re.match(mate_pattern, reasoning)
         if mate_match:
             mate_moves = int(mate_match.group(1))
             # Convert mate to large centipawn equivalent
-            return 9999 if "white" in reasoning.lower() else -9999
-            
+            # Positive mate moves = white mate, negative = black mate
+            return 9999 if mate_moves > 0 else -9999
+        
+        # Handle eval patterns: eval: {value} (e.g., "eval: 150", "eval: -200")
+        eval_pattern = r'^eval:\s*([+-]?\d+)$'
+        eval_match = re.match(eval_pattern, reasoning)
+        if eval_match:
+            try:
+                return float(eval_match.group(1))
+            except ValueError:
+                pass
+        
         return None
     
     def get_stockfish_evaluation(self, board: chess.Board) -> float:
@@ -275,7 +275,7 @@ class ChessGRPOTrainer:
             )
             
             # Load the PEFT model on top
-            model = PeftModel.from_pretrained(base_model, model_path)
+            model = PeftModel.from_pretrained(base_model, model_path,is_trainable=True)
             
             print(f"Successfully loaded existing PEFT model from {model_path}")
             print(f"Base model: {peft_config.base_model_name_or_path}")
@@ -304,7 +304,8 @@ class ChessGRPOTrainer:
                 lora_alpha=32,
                 target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
                 lora_dropout=0.05,
-                task_type="CAUSAL_LM"
+                task_type="CAUSAL_LM",
+                inference_mode=False
             )
             model = get_peft_model(model, lora_config)
             
