@@ -232,32 +232,41 @@ class ChessGRPOEnvironment:
 class ChessGRPOTrainer:
     """GRPO trainer for chess"""
     
-    def __init__(self, model_name: str, output_dir: str, stockfish_skill_level: int = 3):
+    def __init__(self, model_name: str, output_dir: str, stockfish_skill_level: int = 3, load_in_8bit: bool = False):
         self.model_name = model_name
         self.output_dir = output_dir
         self.stockfish_skill_level = stockfish_skill_level
         
         # Load model and tokenizer with PEFT support
-        self.model, self.tokenizer = self._load_peft_model(model_name)
+        self.model, self.tokenizer = self._load_peft_model(model_name, load_in_8bit)
         
         # Initialize environment
         self.env = ChessGRPOEnvironment(skill_level=stockfish_skill_level)
         
-        # GRPO configuration
+        # GRPO configuration with memory optimizations
         self.grpo_config = GRPOConfig(
             output_dir=output_dir,
             learning_rate=1e-5,
             logging_steps=10,
-            fp16=True
+            fp16=True,
+            # Critical memory optimizations for GRPO
+            per_device_train_batch_size=1,  # Start with 1, can increase if stable
+            gradient_accumulation_steps=8,  # Accumulate to effective batch size
+            gradient_checkpointing=True,
+            # GRPO specific memory settings
         )
     
-    def _load_peft_model(self, model_path: str):
-        """Load model with LoRA like in train.py"""
+    def _load_peft_model(self, model_path: str, load_in_8bit: bool = False):
+        """Load model with aggressive memory optimizations"""
         
         # Load tokenizer first
         tokenizer = AutoTokenizer.from_pretrained(model_path)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
+        
+        # Clear any existing CUDA cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         try:
             # Try to load as existing PEFT model first
@@ -265,6 +274,11 @@ class ChessGRPOTrainer:
             
             # Configure quantization like in train.py
             quantization_config = None
+            if load_in_8bit:
+                quantization_config = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                    llm_int8_threshold=6.0
+                )
             
             # Load base model with quantization
             base_model = AutoModelForCausalLM.from_pretrained(
@@ -310,6 +324,12 @@ class ChessGRPOTrainer:
             model = get_peft_model(model, lora_config)
             
             print(f"Applied LoRA to base model {model_path}")
+        
+        # Enable gradient checkpointing
+        if hasattr(model, 'gradient_checkpointing_enable'):
+            model.gradient_checkpointing_enable()
+        elif hasattr(model.base_model, 'gradient_checkpointing_enable'):
+            model.base_model.gradient_checkpointing_enable()
         
         # Print memory usage for debugging
         if torch.cuda.is_available():
@@ -358,7 +378,12 @@ class ChessGRPOTrainer:
         return rewards
     
     def train(self, num_iterations: int = 10, games_per_iteration: int = 100):
-        """Main training loop"""
+        """Main training loop with memory management"""
+        
+        # Clear GPU cache before starting
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
         for iteration in range(num_iterations):
             print(f"GRPO Iteration {iteration + 1}/{num_iterations}")
             
@@ -366,7 +391,13 @@ class ChessGRPOTrainer:
             print("Generating game data...")
             dataset = self.generate_game_data(games_per_iteration)
             
-            # Create GRPO trainer with reward function
+            # Force garbage collection and clear cache
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            # Create GRPO trainer with memory-optimized settings
             trainer = GRPOTrainer(
                 model=self.model,
                 args=self.grpo_config,
@@ -387,8 +418,7 @@ class ChessGRPOTrainer:
                 self.env.skill_level = min(20, self.env.skill_level + 2)
                 print(f"Increased Stockfish skill level to {self.env.skill_level}")
         
-        # Save final model
-        trainer.save_model(f"{self.output_dir}/final")
+        print("Training completed!")
 
 
 def parse_args():
@@ -433,7 +463,8 @@ def main():
         trainer = ChessGRPOTrainer(
             model_name=args.model_path,
             output_dir=args.output_dir,
-            stockfish_skill_level=args.initial_skill_level
+            stockfish_skill_level=args.initial_skill_level,
+            load_in_8bit=args.load_in_8bit
         )
         
         trainer.train(
