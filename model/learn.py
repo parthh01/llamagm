@@ -197,7 +197,7 @@ class ChessGRPOEnvironment:
         eval_after = self.get_stockfish_evaluation(board_copy)
         info['eval_after'] = eval_after
         
-        reward += eval_after*(-1 if is_white_move else 1) #TODO: scale this appropriately
+        reward += eval_after*(1 if is_white_move else -1)/100 #TODO: scale this appropriately
         return reward, info
         
     
@@ -463,7 +463,7 @@ def progressive_stockfish_training(model_path: str, output_dir: str, iterations:
         )
         
         # Train for a few iterations at this skill level
-        trainer.train(num_iterations=3, games_per_iteration=50)
+        trainer.train(num_iterations=3, games_per_iteration=10)
         
         # Update model path for next iteration
         # After GRPO training, the model is saved as a regular model, not PEFT
