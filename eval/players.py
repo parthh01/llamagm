@@ -134,10 +134,18 @@ class LLMPlayer(BasePlayer):
             "color": "w" if board.turn else "b"
         }
         prompt = f"[INST] {system_prompt}\n\n{json.dumps(position_input)} [/INST]" 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        outputs = self.model.generate(inputs["input_ids"],max_new_tokens=40)
-        assert len(outputs[0]) <= 40, f"LLM response too long: {len(outputs[0])}"
-        response = self.tokenizer.decode(outputs[0],skip_special_tokens=True)
+        inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+        
+        # Generate with proper parameters
+        outputs = self.model.generate(
+            inputs["input_ids"],
+            attention_mask=inputs["attention_mask"],
+            max_new_tokens=40,
+            pad_token_id=self.tokenizer.eos_token_id,
+        )
+        
+        assert len(outputs[0]) - len(inputs["input_ids"][0]) <= 40, f"LLM response too long: {len(outputs[0]) - len(inputs['input_ids'][0])}"
+        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         model_response = response.split("[/INST]")[1].strip()
         try:
             response_json = json.loads(model_response)
