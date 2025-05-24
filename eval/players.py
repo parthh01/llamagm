@@ -57,11 +57,11 @@ class StockfishPlayer(BasePlayer):
             
             if evaluation['type'] == 'cp':
                 # Convert centipawns to pawns
-                return evaluation['value'] / 100.0
+                return evaluation['value']
             elif evaluation['type'] == 'mate':
                 # Return a large value for mate, with sign indicating which side is winning
                 # Positive mate score means white is winning, negative means black is winning
-                return 1.0 if evaluation['value'] > 0 else -1.0
+                return 999 if evaluation['value'] > 0 else -999
             else:
                 # Fallback for unexpected evaluation type
                 return 0.5

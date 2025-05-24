@@ -130,9 +130,9 @@ class ChessGauntlet:
                 eval_score = evaluator.evaluate_position(board)
                 
                 # Positive score favors white, negative favors black
-                if eval_score > 0.5:  # White is winning
+                if eval_score > 0:  # White is winning
                     score = 1.0 if player_is_white else 0.0
-                elif eval_score < -0.5:  # Black is winning
+                elif eval_score < 0:  # Black is winning
                     score = 0.0 if player_is_white else 1.0
                 else:  # Draw-ish position
                     score = 0.5
@@ -315,7 +315,7 @@ class ChessGauntlet:
                 break
             
             # If this is the last level and player passed, note that they completed the gauntlet
-            if level_idx == len(self.stockfish_levels) - 1:
+            if level_idx == len(levels) - 1:
                 print("Player successfully completed the entire gauntlet!")
         
         # Calculate final statistics
