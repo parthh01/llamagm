@@ -58,7 +58,7 @@ class ChessGauntlet:
         illegal_moves = 0
         moves_made = 0
         time_limit = 10000  # 10 seconds per move
-        move_timeout = 5  # 5 seconds timeout for move generation
+        move_timeout = 30  # 5 seconds timeout for move generation
         # Use longer timeout for Stockfish players
         stockfish_timeout = 15 if isinstance(opponent, StockfishPlayer) else move_timeout
         

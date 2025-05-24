@@ -21,10 +21,10 @@ load_dotenv()
 @dataclass
 class ChessReward:
     """Reward structure for chess moves"""
-    json_parse_reward: float = -10.0  # Large negative for invalid JSON
+    json_parse_reward: float = -999999  # Large negative for invalid JSON
     illegal_move_reward: float = -0.1  # Very weakly negative for illegal moves
     valid_move_reward: float = 0.1    # Very weakly positive for legal moves
-    value_parse_reward: float = -1.0   # Small negative for unparseable value
+    value_parse_reward: float = -0.05   # Small negative for unparseable value
     value_accuracy_weight: float = 0.01  # Weight for value estimation accuracy
     position_improvement_weight: float = 2.0  # Weight for position improvement
     win_reward: float = 20.0  # Large positive for wins
@@ -247,6 +247,7 @@ class ChessGRPOTrainer:
             per_device_train_batch_size=1,  # Start with 1, can increase if stable
             gradient_accumulation_steps=8,  # Accumulate to effective batch size
             gradient_checkpointing=True,
+            report_to="wandb"
             # GRPO specific memory settings
         )
     

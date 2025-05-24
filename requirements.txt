@@ -12,6 +12,7 @@ protobuf
 sentencepiece
 trl 
 torch 
+wandb 
 
 #data
 sqlalchemy==2.0.38
