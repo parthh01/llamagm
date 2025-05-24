@@ -463,7 +463,7 @@ def progressive_stockfish_training(model_path: str, output_dir: str, iterations:
         )
         
         # Train for a few iterations at this skill level
-        trainer.train(num_iterations=3, games_per_iteration=10)
+        trainer.train(num_iterations=3, games_per_iteration=4)
         
         # Update model path for next iteration
         # After GRPO training, the model is saved as a regular model, not PEFT

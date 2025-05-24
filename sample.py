@@ -13,7 +13,7 @@ load_dotenv()
 from eval.players import StockfishPlayer, stockfish_skill_elo_map
 
 #model_name = "./open_llama_7b-lora-final"
-model_name = "./chess-grpo-output/checkpoint-150"
+model_name = "meta-llama/Llama-3.2-1B"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
@@ -65,7 +65,6 @@ def get_llm_move(board):
     outputs = model.generate(
         inputs["input_ids"],
         max_new_tokens=40,
-        temperature=0
     )
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
     

@@ -139,7 +139,11 @@ class LLMPlayer(BasePlayer):
         assert len(outputs[0]) <= 40, f"LLM response too long: {len(outputs[0])}"
         response = self.tokenizer.decode(outputs[0],skip_special_tokens=True)
         model_response = response.split("[/INST]")[1].strip()
-        response_json = json.loads(model_response)
+        try:
+            response_json = json.loads(model_response)
+        except Exception as e:
+            print(model_response)
+            raise e
         
         move_str = response_json["move"]
         # Check if the move is in the list of legal moves
