@@ -5,10 +5,15 @@ from datasets import load_dataset
 from trl import SFTTrainer,SFTConfig
 from peft import LoraConfig, get_peft_model
 from dotenv import load_dotenv
-import os 
+import os
+import sys 
+
+# Add the project root directory to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from sqlalchemy import create_engine
 from datagen.loader import create_dataset
-from accelerate import Accelerator
 
 
 def parse_args():
@@ -42,19 +47,11 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-    # Initialize accelerator with proper configuration for IterableDataset
-    accelerator = Accelerator(
-        split_batches=True,  # Main process fetches full batch and splits it
-        dispatch_batches=False  # Don't try to dispatch different sized batches
-    )
     
     args = parse_args()
     
     load_dotenv()
     
-    # Only load dataset on main process to avoid duplication
-    if accelerator.is_main_process:
-        print(f"Training on {accelerator.num_processes} GPUs")
     
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
@@ -73,26 +70,21 @@ def main():
     )
     
     # Calculate max_steps based on total rows and number of processes
-    max_steps = (total_rows // (args.per_device_train_batch_size * accelerator.num_processes)) * args.num_train_epochs
-    if accelerator.is_main_process:
-        print(f"Training for {max_steps} steps based on {total_rows} examples across {accelerator.num_processes} GPUs")
+    max_steps = (total_rows // (args.per_device_train_batch_size)) * args.num_train_epochs
     
     # Configure quantization - disable for multi-GPU as it can cause issues
     quantization_config = None
-    if args.load_in_8bit and accelerator.num_processes == 1:
+    if args.load_in_8bit:
         quantization_config = BitsAndBytesConfig(
             load_in_8bit=True,
             llm_int8_threshold=6.0
         )
-    elif args.load_in_8bit and accelerator.num_processes > 1:
-        if accelerator.is_main_process:
-            print("Warning: Disabling 8-bit quantization for multi-GPU training")
     
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         quantization_config=quantization_config,
         torch_dtype=torch.float16,  # Use fp16 for better multi-GPU performance
-        device_map=None,  # Let accelerator handle device placement
+        device_map="auto",
         #attn_implementation="flash_attention_2"
     )
     
@@ -119,14 +111,13 @@ def main():
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
         max_steps=max_steps,
-        report_to="wandb" if accelerator.is_main_process else None,  # Only log from main process
+        report_to="wandb",
         dataloader_num_workers=4,  # Improve data loading performance
         gradient_accumulation_steps=1,
         warmup_steps=100,
         save_total_limit=3,  # Limit number of checkpoints to save space
         logging_first_step=True,
         remove_unused_columns=False,
-        ddp_find_unused_parameters=False,  # Optimize DDP performance
         completion_only_loss=True
     )
     
@@ -139,9 +130,7 @@ def main():
     
     trainer.train()
     
-    # Only save from main process
-    if accelerator.is_main_process:
-        trainer.save_model(f"{args.output_dir}-final")
+    trainer.save_model(f"{args.output_dir}-final")
 
 if __name__ == "__main__":
     main()
