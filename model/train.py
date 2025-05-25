@@ -33,7 +33,7 @@ def parse_args():
     # Training arguments
     parser.add_argument("--learning_rate", type=float, default=2e-4, help="Learning rate")
     parser.add_argument("--num_train_epochs", type=int, default=3, help="Number of training epochs")
-    parser.add_argument("--per_device_train_batch_size", type=int, default=4, help="Per-device training batch size")
+    parser.add_argument("--per_device_train_batch_size", type=int, default=8, help="Per-device training batch size")
     parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X steps")
     parser.add_argument("--logging_steps", type=int, default=100, help="Log every X steps")
     parser.add_argument("--output_dir", type=str, default=None, help="Output directory for model checkpoints")

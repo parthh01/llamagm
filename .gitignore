@@ -10,3 +10,4 @@ openlm-research/*
 chess-grpo-output/
 checkpoint-150/
 train_output/
+wandb/

@@ -12,10 +12,11 @@ from peft import PeftModel, PeftConfig
 #derived from https://lichess.org/forum/general-chess-discussion/what-elo-are-the-various-stockfish-levels and https://www.reddit.com/r/chess/comments/ltzzon/what_is_the_approximate_elo_rating_of_each_of_the/
 #really we are just using this for relative strength so even if these elo ratings aren't quite accurate, that it's the idential ratings used for all evals allows for relative comparisons
 stockfish_skill_elo_map = {
-    850: {"Skill Level": 3,"Threads": 2,"Depth": 1},
-    950: {"Skill Level": 6, "Threads": 2,"Depth": 2},
-    1050: {"Skill Level": 9, "Threads": 2,"Depth": 3},
-    1250: {"Skill Level": 11, "Threads": 2,"Depth": 4},
+    400: {"Skill Level": 1, "Threads": 1, "Depth": 1},
+    850: {"Skill Level": 3,"Threads": 1,"Depth": 1},
+    950: {"Skill Level": 6, "Threads": 1,"Depth": 2},
+    1050: {"Skill Level": 9, "Threads": 1,"Depth": 3},
+    1250: {"Skill Level": 11, "Threads": 1,"Depth": 4},
     1700: {"Skill Level": 14, "Threads": 2,"Depth": 6},
     1900: {"Skill Level": 17, "Threads": 1,"Depth": 8},
     2000: {"Skill Level": 20, "Threads": 1,"Depth": 10}

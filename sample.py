@@ -13,7 +13,7 @@ load_dotenv()
 from eval.players import StockfishPlayer, stockfish_skill_elo_map
 
 #model_name = "./open_llama_7b-lora-final"
-model_name = "./train_output/checkpoint-6500"
+model_name = "./train_output/checkpoint-9500"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
