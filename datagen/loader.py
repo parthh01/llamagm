@@ -145,7 +145,7 @@ def process_batch(batch_df, tokenizer):
     
     return {"prompt": prompts, "completion": completions}
 
-def stream_dataset(engine, tokenizer, batch_size=1000):
+def stream_dataset(engine, tokenizer, batch_size=1000,prompt_completion=False):
     """Stream the dataset in batches and yield processed examples"""
     total_rows = get_total_rows(engine)
     offset = 0
@@ -171,7 +171,7 @@ def stream_dataset(engine, tokenizer, batch_size=1000):
         for prompt, completion in zip(batch_data["prompt"], batch_data["completion"]):
             # Combine prompt and completion into a single text field
             combined_text = f"{prompt} {completion}"
-            yield {"text": combined_text}
+            yield {"text": combined_text} if prompt_completion else {"prompt": prompt, "completion": completion}
 
 def create_dataset(database_url, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
     """Create a Hugging Face dataset using a single text field format"""
@@ -210,5 +210,36 @@ if __name__ == "__main__":
         push_to_hub=False,
         hub_name=None  # "your-username/chess-moves-dataset"
     )
-    print(next(iter(dataset)))
+    
+    # Print samples at specific intervals to check for corruption
+    check_intervals = [0, 3500, 6500, 10500]  # Beginning and suspected corruption points
+    
+    print(f"\n=== Checking dataset samples at intervals: {check_intervals} ===")
+    
+    for interval in check_intervals:
+        if interval >= total_rows:
+            print(f"\nInterval {interval} exceeds total rows ({total_rows}), skipping...")
+            continue
+            
+        print(f"\n--- Samples around step {interval} ---")
+        
+        # Skip to the desired position and take 5 samples
+        dataset_iter = iter(dataset)
+        
+        # Skip to the interval position
+        for _ in range(interval):
+            try:
+                next(dataset_iter)
+            except StopIteration:
+                print(f"Reached end of dataset before step {interval}")
+                break
+        
+        # Print 5 samples from this position
+        for i in range(5):
+            try:
+                sample = next(dataset_iter)
+                print(f"Sample {interval + i}: {sample}")
+            except StopIteration:
+                print(f"Reached end of dataset at sample {interval + i}")
+                break
 
