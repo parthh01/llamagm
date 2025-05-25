@@ -68,18 +68,8 @@ def main():
     engine = create_engine(DATABASE_URL)
     
     # Get dataset and total rows
-    training_dataset, total_rows = create_dataset(
-        database_url=DATABASE_URL,
-        tokenizer=tokenizer,
-        batch_size=args.batch_size,
-        push_to_hub=args.push_to_hub,
-        hub_name=args.hub_name,
-        prompt_completion=True  # This creates combined text format
-    )
+    training_dataset = load_dataset("parthh01/llamagm-bongcloud",streaming=True)
     
-    # Calculate max_steps based on total rows and number of GPUs
-    max_steps = (total_rows // (args.per_device_train_batch_size * num_gpus)) * args.num_train_epochs
-    print(f"Training for {max_steps} steps based on {total_rows} examples across {num_gpus} GPUs")
     
     # Configure quantization - disable for multi-GPU
     quantization_config = None
@@ -123,7 +113,6 @@ def main():
         per_device_train_batch_size=args.per_device_train_batch_size,
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
-        max_steps=max_steps,
         report_to="wandb",
         gradient_accumulation_steps=1,
         warmup_steps=100,

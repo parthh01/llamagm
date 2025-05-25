@@ -197,49 +197,97 @@ def create_dataset(database_url, tokenizer, batch_size=1000, push_to_hub=False, 
     
     return dataset, total_rows
 
+def create_full_dataset_in_memory(database_url, tokenizer, push_to_hub=False, hub_name=None, prompt_completion=False):
+    """Load all data into memory, process it, and create a Hugging Face dataset"""
+    engine = create_engine(database_url)
+    
+    print("Loading all data from database into memory...")
+    
+    # Load all data at once
+    query = text("SELECT * FROM games ORDER BY id")
+    with engine.connect() as conn:
+        all_data_df = pd.read_sql(query, conn)
+    
+    total_rows = len(all_data_df)
+    print(f"Loaded {total_rows} rows from database")
+    
+    print("Processing all data...")
+    
+    # Process all data at once
+    processed_data = process_batch(all_data_df, tokenizer)
+    
+    # Create the dataset format
+    dataset_data = []
+    for prompt, completion in zip(processed_data["prompt"], processed_data["completion"]):
+        if prompt_completion:
+            # Combine prompt and completion into a single text field
+            combined_text = f"{prompt} {completion}"
+            dataset_data.append({"text": combined_text})
+        else:
+            dataset_data.append({"prompt": prompt, "completion": completion})
+    
+    print(f"Successfully processed {len(dataset_data)} examples")
+    
+    # Create Hugging Face dataset from the processed data
+    dataset = Dataset.from_list(dataset_data)
+    
+    # Optionally push to Hugging Face Hub
+    if push_to_hub and hub_name:
+        print(f"Pushing dataset to Hugging Face Hub: {hub_name}")
+        dataset.push_to_hub(hub_name)
+        print("Dataset successfully uploaded to Hugging Face Hub")
+    
+    print(f"Dataset created successfully with {len(dataset_data)} examples")
+    
+    # Display a sample
+    if len(dataset_data) > 0:
+        print(f"Sample example: {dataset_data[0]}")
+    
+    return dataset, len(dataset_data)
 
 if __name__ == "__main__":
     # Example usage
     load_dotenv()
     DATABASE_URL = f"postgresql://{os.getenv('PGUSER')}:{os.getenv('PGPASSWORD')}@{os.getenv('PGHOST')}:{os.getenv('PGPORT')}/{os.getenv('PGDATABASE')}?sslmode=require"
-    tokenizer = AutoTokenizer.from_pretrained("./openlm-research/open_llama_7b-lora-final")
-    dataset, total_rows = create_dataset(
-        database_url=DATABASE_URL,
-        tokenizer=tokenizer,
-        batch_size=32,
-        push_to_hub=False,
-        hub_name=None  # "your-username/chess-moves-dataset"
-    )
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+    dataset, total_rows = create_full_dataset_in_memory(DATABASE_URL,tokenizer,push_to_hub=True,hub_name="llamagm-bongcloud")
+    # dataset, total_rows = create_dataset(
+    #     database_url=DATABASE_URL,
+    #     tokenizer=tokenizer,
+    #     batch_size=32,
+    #     push_to_hub=False,
+    #     hub_name=None  # "your-username/chess-moves-dataset"
+    # )
     
-    # Print samples at specific intervals to check for corruption
-    check_intervals = [0, 3500, 6500, 10500]  # Beginning and suspected corruption points
+    # # Print samples at specific intervals to check for corruption
+    # check_intervals = [0, 3500, 6500, 10500]  # Beginning and suspected corruption points
     
-    print(f"\n=== Checking dataset samples at intervals: {check_intervals} ===")
+    # print(f"\n=== Checking dataset samples at intervals: {check_intervals} ===")
     
-    for interval in check_intervals:
-        if interval >= total_rows:
-            print(f"\nInterval {interval} exceeds total rows ({total_rows}), skipping...")
-            continue
+    # for interval in check_intervals:
+    #     if interval >= total_rows:
+    #         print(f"\nInterval {interval} exceeds total rows ({total_rows}), skipping...")
+    #         continue
             
-        print(f"\n--- Samples around step {interval} ---")
+    #     print(f"\n--- Samples around step {interval} ---")
         
-        # Skip to the desired position and take 5 samples
-        dataset_iter = iter(dataset)
+    #     # Skip to the desired position and take 5 samples
+    #     dataset_iter = iter(dataset)
         
-        # Skip to the interval position
-        for _ in range(interval):
-            try:
-                next(dataset_iter)
-            except StopIteration:
-                print(f"Reached end of dataset before step {interval}")
-                break
+    #     # Skip to the interval position
+    #     for _ in range(interval):
+    #         try:
+    #             next(dataset_iter)
+    #         except StopIteration:
+    #             print(f"Reached end of dataset before step {interval}")
+    #             break
         
-        # Print 5 samples from this position
-        for i in range(5):
-            try:
-                sample = next(dataset_iter)
-                print(f"Sample {interval + i}: {sample}")
-            except StopIteration:
-                print(f"Reached end of dataset at sample {interval + i}")
-                break
+    #     # Print 5 samples from this position
+    #     for i in range(5):
+    #         try:
+    #             sample = next(dataset_iter)
+    #             print(f"Sample {interval + i}: {sample}")
+    #         except StopIteration:
+    #             print(f"Reached end of dataset at sample {interval + i}")
+    #             break
 
