@@ -8,7 +8,7 @@ gauntlet_results.json
 elo_progression.png
 openlm-research/*
 chess-grpo-output/
-checkpoint-150/
+checkpoint-*/
 train_output/
 wandb/
 train_output-final/
