@@ -41,7 +41,7 @@ def parse_args():
     
     # Training arguments
     parser.add_argument("--learning_rate", type=float, default=2e-4, help="Learning rate")
-    parser.add_argument("--num_train_epochs", type=int, default=30, help="Number of training epochs")
+    parser.add_argument("--num_train_epochs", type=int, default=6, help="Number of training epochs")
     parser.add_argument("--per_device_train_batch_size", type=int, default=8, help="Per-device training batch size")
     parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X steps")
     parser.add_argument("--logging_steps", type=int, default=100, help="Log every X steps")
@@ -53,7 +53,7 @@ def parse_args():
     
     # Early stopping arguments
     parser.add_argument("--early_stopping_patience", type=int, default=3, help="Number of evaluations with no improvement after which training will be stopped")
-    parser.add_argument("--early_stopping_threshold", type=float, default=0.01, help="Minimum change in loss to qualify as an improvement")
+    parser.add_argument("--early_stopping_threshold", type=float, default=0.001, help="Minimum change in loss to qualify as an improvement")
     
     return parser.parse_args()
 
