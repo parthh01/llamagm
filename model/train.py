@@ -23,11 +23,11 @@ def parse_args():
     parser.add_argument("--load_in_8bit", action="store_true", default=True, help="Whether to load model in 8-bit quantization")
     
     # LoRA arguments
-    parser.add_argument("--lora_r", type=int, default=16, help="LoRA attention dimension")
-    parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha parameter")
-    parser.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout probability")
+    parser.add_argument("--lora_r", type=int, default=32, help="LoRA attention dimension")
+    parser.add_argument("--lora_alpha", type=int, default=64, help="LoRA alpha parameter")
+    parser.add_argument("--lora_dropout", type=float, default=0.1, help="LoRA dropout probability")
     parser.add_argument("--target_modules", type=str, nargs="+", 
-                        default=["q_proj", "k_proj", "v_proj", "o_proj"], 
+                        default=["q_proj", "k_proj", "v_proj", "o_proj","gate_proj","down_proj","up_proj"], 
                         help="Target modules for LoRA")
     
     # Training arguments
