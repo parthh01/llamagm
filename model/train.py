@@ -47,6 +47,10 @@ def parse_args():
     parser.add_argument("--logging_steps", type=int, default=100, help="Log every X steps")
     parser.add_argument("--output_dir", type=str, default=None, help="Output directory for model checkpoints")
     
+    # Dataset split arguments
+    parser.add_argument("--eval_split_ratio", type=float, default=0.05, help="Ratio of dataset to use for evaluation (0.1 = 10%)")
+    parser.add_argument("--random_seed", type=int, default=42, help="Random seed for dataset splitting")
+    
     # Early stopping arguments
     parser.add_argument("--early_stopping_patience", type=int, default=3, help="Number of evaluations with no improvement after which training will be stopped")
     parser.add_argument("--early_stopping_threshold", type=float, default=0.01, help="Minimum change in loss to qualify as an improvement")
@@ -71,9 +75,20 @@ def main():
     DATABASE_URL = f"postgresql://{os.getenv('PGUSER')}:{os.getenv('PGPASSWORD')}@{os.getenv('PGHOST')}:{os.getenv('PGPORT')}/{os.getenv('PGDATABASE')}?sslmode=require"
     engine = create_engine(DATABASE_URL)
     
-    # Get dataset and total rows
-    training_dataset = load_dataset("parthh01/llamagm-bongcloud",split="train")
+    # Get dataset and split into train/eval
+    full_dataset = load_dataset("parthh01/llamagm-bongcloud", split="train")
     
+    # Split dataset into train and eval
+    dataset_split = full_dataset.train_test_split(
+        test_size=args.eval_split_ratio, 
+        seed=args.random_seed,
+        shuffle=True
+    )
+    training_dataset = dataset_split["train"]
+    eval_dataset = dataset_split["test"]
+    
+    print(f"Training samples: {len(training_dataset)}")
+    print(f"Evaluation samples: {len(eval_dataset)}")
     
     # Configure quantization - disable for multi-GPU
     quantization_config = None
@@ -115,6 +130,7 @@ def main():
         learning_rate=args.learning_rate,
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.per_device_train_batch_size,
+        per_device_eval_batch_size=args.per_device_train_batch_size,  # Same batch size for eval
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
         report_to="wandb",
@@ -125,9 +141,9 @@ def main():
         remove_unused_columns=False,
         completion_only_loss=True,
         # Early stopping configuration
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=args.logging_steps,  # Evaluate at the same frequency as logging
-        metric_for_best_model="train_loss",
+        metric_for_best_model="eval_loss",  # Use eval_loss instead of train_loss
         greater_is_better=False,  # Lower loss is better
         load_best_model_at_end=True,
     )
@@ -143,6 +159,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=training_dataset,
+        eval_dataset=eval_dataset,  # Add eval dataset
         callbacks=[early_stopping_callback],
     )
     
