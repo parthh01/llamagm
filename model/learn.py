@@ -520,36 +520,35 @@ def main():
     print("GRPO training completed!")
 
 if __name__ == "__main__":
-    main()
-    # trainer = ChessGRPOTrainer(
-    #     model_name="./chess-grpo-output/skill_1/checkpoint-666",
-    #     output_dir="./chess-grpo-output",
-    #     stockfish_skill_level=3,
-    #     load_in_8bit=True
-    # )
-    # prompts = [
-    #     "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
-    #     "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
-    #     "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
-    #     "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
-    #     "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
-    #     "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
-    # ]
-    # completions = [
-    #     "{\"move\": \"Ke1\", \"reasoning\": \"eval: 100\"}", 
-    #     "{\"move\": \"d4\", \"reasoning\": \"eval: 100\"}",
-    #     "{\"move\": \"d3\", \"reasoning\": \"eval: 100\"}",
-    #     "{\"move\": \"cxd4\", \"reasoning\": \"eval: 100\"}",
-    #     "{\"move\": dkfndkajnfkdjan",
-    #     "{\"move\": \"Ke2\', \"reasoning\": \"eval: 100\"}"
+    #main()
+    trainer = ChessGRPOTrainer(
+        model_name="./train_output-final",
+        output_dir="./chess-grpo-output",
+        stockfish_skill_level=3
+    )
+    prompts = [
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+        "{\"moveHistory\": [\"e4\", \"e5\",\"Ke2\",\"d6\"]}",
+    ]
+    completions = [
+        "{\"move\": \"Ke1\", \"reasoning\": \"eval: 100\"}", 
+        "{\"move\": \"d4\", \"reasoning\": \"eval: 100\"}",
+        "{\"move\": \"d3\", \"reasoning\": \"eval: 100\"}",
+        "{\"move\": \"cxd4\", \"reasoning\": \"eval: 100\"}",
+        "{\"move\": dkfndkajnfkdjan",
+        "{\"move\": \"Ke2\', \"reasoning\": \"eval: 100\"}"
 
-    # ]
-    # board_state = [
-    #     "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
-    #     "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
-    #     "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
-    #     "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
-    #     "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
-    #     "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
-    # ]
-    # trainer.chess_reward_function(completions, prompts=prompts,board_state=board_state)
+    ]
+    board_state = [
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+        "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w kq - 0 3",
+    ]
+    trainer.chess_reward_function(completions, prompts=prompts,board_state=board_state)
