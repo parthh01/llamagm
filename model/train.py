@@ -42,8 +42,11 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-    # Initialize accelerator first
-    accelerator = Accelerator()
+    # Initialize accelerator with proper configuration for IterableDataset
+    accelerator = Accelerator(
+        split_batches=True,  # Main process fetches full batch and splits it
+        dispatch_batches=False  # Don't try to dispatch different sized batches
+    )
     
     args = parse_args()
     
