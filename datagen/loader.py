@@ -173,7 +173,7 @@ def stream_dataset(engine, tokenizer, batch_size=1000,prompt_completion=False):
             combined_text = f"{prompt} {completion}"
             yield {"text": combined_text} if prompt_completion else {"prompt": prompt, "completion": completion}
 
-def create_dataset(database_url, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None):
+def create_dataset(database_url, tokenizer, batch_size=1000, push_to_hub=False, hub_name=None,prompt_completion=False):
     """Create a Hugging Face dataset using a single text field format"""
     # Get total rows count
     engine = create_engine(database_url)
@@ -181,7 +181,7 @@ def create_dataset(database_url, tokenizer, batch_size=1000, push_to_hub=False, 
     def generator_fn(url):
         # Create a new engine inside the generator to avoid pickling issues
         local_engine = create_engine(url)
-        yield from stream_dataset(local_engine, tokenizer, batch_size)
+        yield from stream_dataset(local_engine, tokenizer, batch_size,prompt_completion)
     
     # Create an IterableDataset using the streaming generator
     dataset = IterableDataset.from_generator(lambda: generator_fn(str(database_url)))

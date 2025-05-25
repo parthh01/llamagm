@@ -56,7 +56,8 @@ def main():
         tokenizer=tokenizer,
         batch_size=args.batch_size,
         push_to_hub=args.push_to_hub,
-        hub_name=args.hub_name
+        hub_name=args.hub_name,
+        prompt_completion=True
     )
     
     # Calculate max_steps based on total rows
