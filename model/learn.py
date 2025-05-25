@@ -30,12 +30,12 @@ load_dotenv()
 @dataclass
 class ChessReward:
     """Reward structure for chess moves"""
-    json_parse_reward: float = -999999  # Large negative for invalid JSON
-    illegal_move_reward: float = -0.1  # Very weakly negative for illegal moves
-    valid_move_reward: float = 0.1    # Very weakly positive for legal moves
-    value_parse_reward: float = -0.05   # Small negative for unparseable value
-    value_accuracy_weight: float = 0.01  # Weight for value estimation accuracy
-    position_improvement_weight: float = 2.0  # Weight for position improvement
+    json_parse_penalty: float = -10.0  # Large negative for invalid JSON
+    illegal_move_reward: float = 0.0   # Neutral for illegal moves
+    legal_move_reward: float = 0.5     # Weak positive for legal moves
+    reasoning_parse_reward: float = 0.2  # Weak positive for parseable reasoning
+    value_accuracy_reward: float = 1.0   # Medium positive for accurate evaluation
+    position_improvement_reward: float = 5.0  # Large positive for position improvement
     win_reward: float = 20.0  # Large positive for wins
     draw_reward: float = 0.0  # Neutral for draws
     loss_reward: float = -20.0  # Large negative for losses
@@ -166,59 +166,93 @@ class ChessGRPOEnvironment:
             info['move_number'] = llm_move_count
             return 0.0, info
         
-        # Parse model output
+        # 1. Parse model output - large negative penalty for invalid JSON
         move_str, reasoning, is_valid_json = self.parse_model_output(model_output)
         info['valid_json'] = is_valid_json
         info['move_str'] = move_str
         info['reasoning'] = reasoning
         
-        # Reward for valid JSON parsing
         if not is_valid_json:
-            reward += self.reward_config.json_parse_reward
-            info['json_parse_penalty'] = self.reward_config.json_parse_reward
+            reward += self.reward_config.json_parse_penalty
+            info['json_parse_penalty'] = self.reward_config.json_parse_penalty
             return reward, info
         
-        # Check if move is legal
+        # 2. Check if move is legal - neutral reward for illegal moves
         legal_moves = list(board.legal_moves)
         legal_moves_san = [board.san(move) for move in legal_moves]
         
         if move_str not in legal_moves_san:
-            # Very weakly negative for illegal moves (but valid JSON)
-            reward += self.reward_config.illegal_move_reward
-            info['illegal_move_penalty'] = self.reward_config.illegal_move_reward
+            reward += self.reward_config.illegal_move_reward  # 0.0
+            info['illegal_move'] = True
             return reward, info
         
         # Parse the move
         try:
             move = board.parse_san(move_str)
             info['move'] = move
-            # Base positive reward for legal moves
-            reward += self.reward_config.valid_move_reward
-            info['valid_move_reward'] = self.reward_config.valid_move_reward
         except ValueError:
-            reward += self.reward_config.illegal_move_reward
+            reward += self.reward_config.illegal_move_reward  # 0.0
             info['move_parse_error'] = True
             return reward, info
         
-        # Make the move and evaluate the resulting position
+        # 3. Legal move - weak positive reward
+        reward += self.reward_config.legal_move_reward
+        info['legal_move_reward'] = self.reward_config.legal_move_reward
+        
+        # 4. Check if reasoning can be parsed - weak positive reward
+        estimated_eval = self.extract_value_from_reasoning(reasoning)
+        if estimated_eval is not None:
+            reward += self.reward_config.reasoning_parse_reward
+            info['reasoning_parse_reward'] = self.reward_config.reasoning_parse_reward
+            info['estimated_eval'] = estimated_eval
+            
+            # 5. Check accuracy of evaluation - medium positive reward
+            board_copy = board.copy()
+            board_copy.push(move)
+            actual_eval = self.get_stockfish_evaluation(board_copy)
+            info['actual_eval'] = actual_eval
+            
+            # Calculate accuracy reward based on how close the estimate is
+            eval_error = abs(estimated_eval - actual_eval)
+            # Use exponential decay for accuracy reward - closer estimates get higher rewards
+            max_error = 500  # centipawns - beyond this, no accuracy reward
+            if eval_error < max_error:
+                accuracy_multiplier = np.exp(-eval_error / 200)  # Decay factor
+                accuracy_reward = self.reward_config.value_accuracy_reward * accuracy_multiplier
+                reward += accuracy_reward
+                info['accuracy_reward'] = accuracy_reward
+                info['eval_error'] = eval_error
+        
+        # 6. Position improvement - large positive reward
+        eval_before = self.get_stockfish_evaluation(board)
         board_copy = board.copy()
         board_copy.push(move)
         eval_after = self.get_stockfish_evaluation(board_copy)
-        eval_before = self.get_stockfish_evaluation(board)
         info['eval_after'] = eval_after
         info['eval_before'] = eval_before
         
-        # Calculate position improvement reward
+        # Calculate position improvement
         eval_diff = eval_after - eval_before
         if is_white_move:
             # For white, positive eval_diff is good (position improved)
-            position_reward = eval_diff  
+            position_improvement = eval_diff
         else:
             # For black, negative eval_diff is good (position improved from black's perspective)
-            position_reward = -eval_diff 
+            position_improvement = -eval_diff
         
-        reward += position_reward
-        info['position_reward'] = position_reward
+        # Scale the improvement reward
+        if position_improvement > 0:
+            # Positive improvement gets reward
+            improvement_reward = min(position_improvement / 100, 5.0) * self.reward_config.position_improvement_reward
+            reward += improvement_reward
+            info['improvement_reward'] = improvement_reward
+        else:
+            # Negative improvement gets penalty (but not as harsh as illegal moves)
+            improvement_penalty = max(position_improvement / 100, -2.0) * self.reward_config.position_improvement_reward
+            reward += improvement_penalty
+            info['improvement_penalty'] = improvement_penalty
+        
+        info['position_improvement'] = position_improvement
         info['eval_diff'] = eval_diff
         
         print('move: ', move_str)
