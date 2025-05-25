@@ -1,12 +1,15 @@
 import torch
 import argparse
+import os
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
 from datasets import load_dataset
 from trl import SFTTrainer,SFTConfig
 from peft import LoraConfig, get_peft_model
 from dotenv import load_dotenv
-import os
 import sys 
+
+# Set tokenizer parallelism to avoid fork warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Add the project root directory to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -71,7 +74,7 @@ def main():
         batch_size=args.batch_size,
         push_to_hub=args.push_to_hub,
         hub_name=args.hub_name,
-        prompt_completion=True
+        prompt_completion=True  # This creates combined text format
     )
     
     # Calculate max_steps based on total rows and number of GPUs
@@ -122,7 +125,7 @@ def main():
         logging_steps=args.logging_steps,
         max_steps=max_steps,
         report_to="wandb",
-        dataloader_num_workers=4,
+        dataloader_num_workers=0,  # Set to 0 to avoid IterableDataset issues
         gradient_accumulation_steps=1,
         warmup_steps=100,
         save_total_limit=3,
@@ -130,7 +133,7 @@ def main():
         remove_unused_columns=False,
         completion_only_loss=True,
         # Multi-GPU specific settings
-        dataloader_pin_memory=True,
+        dataloader_pin_memory=False,  # Disable for IterableDataset
         save_safetensors=True,
         bf16=torch.cuda.is_bf16_supported(),  # Use bf16 if supported, otherwise fp16
         fp16=not torch.cuda.is_bf16_supported(),
@@ -142,7 +145,6 @@ def main():
         model=model,
         args=training_args,
         train_dataset=training_dataset,
-        tokenizer=tokenizer,
     )
     
     trainer.train()
