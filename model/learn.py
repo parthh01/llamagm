@@ -204,9 +204,26 @@ class ChessGRPOEnvironment:
         board_copy = board.copy()
         board_copy.push(move)
         eval_after = self.get_stockfish_evaluation(board_copy)
+        eval_before = self.get_stockfish_evaluation(board)
         info['eval_after'] = eval_after
+        info['eval_before'] = eval_before
         
-        reward += eval_after*(1 if is_white_move else -1)/100 #TODO: scale this appropriately
+        # Calculate position improvement reward
+        eval_diff = eval_after - eval_before
+        if is_white_move:
+            # For white, positive eval_diff is good (position improved)
+            position_reward = eval_diff  
+        else:
+            # For black, negative eval_diff is good (position improved from black's perspective)
+            position_reward = -eval_diff 
+        
+        reward += position_reward
+        info['position_reward'] = position_reward
+        info['eval_diff'] = eval_diff
+        
+        print('move: ', move_str)
+        print(info)
+        print('reward: ', reward)
         return reward, info
         
     
