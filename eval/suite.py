@@ -356,14 +356,14 @@ class ChessGauntlet:
 if __name__ == "__main__":
     
     # Initialize your LLM player
-    player = LLMPlayer("./train_output/checkpoint-22500")
+    player = LLMPlayer("./train_output-final")
     #player = RandomPlayer()
     #player = StockfishPlayer(stockfish_skill_elo_map[1700])
     # Create and run the gauntlet
     levels = []
-    #for elo in sorted(stockfish_skill_elo_map.keys()):
-    #    levels.append((elo,StockfishPlayer(stockfish_skill_elo_map[elo])))
-    levels.append((780,LLMPlayer("meta-llama/Llama-3.2-1B")))
+    for elo in sorted(stockfish_skill_elo_map.keys()):
+        levels.append((elo,StockfishPlayer(stockfish_skill_elo_map[elo])))
+    #levels.append((780,LLMPlayer("meta-llama/Llama-3.2-1B")))
     gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
     results = gauntlet.run_gauntlet(levels)
     

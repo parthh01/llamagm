@@ -68,7 +68,7 @@ def main():
     engine = create_engine(DATABASE_URL)
     
     # Get dataset and total rows
-    training_dataset = load_dataset("parthh01/llamagm-bongcloud",streaming=True)
+    training_dataset = load_dataset("parthh01/llamagm-bongcloud",split="train")
     
     
     # Configure quantization - disable for multi-GPU

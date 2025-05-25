@@ -11,3 +11,4 @@ chess-grpo-output/
 checkpoint-150/
 train_output/
 wandb/
+train_output-final/
