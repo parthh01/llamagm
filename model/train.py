@@ -102,7 +102,8 @@ def main():
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
         max_steps=max_steps,
-        report_to="wandb"
+        report_to="wandb",
+        completion_only_loss=True
     )
     
     # Create trainer and train
