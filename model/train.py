@@ -1,7 +1,7 @@
 import torch
 import argparse
 import os
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig, EarlyStoppingCallback
 from datasets import load_dataset
 from trl import SFTTrainer,SFTConfig
 from peft import LoraConfig, get_peft_model
@@ -41,11 +41,15 @@ def parse_args():
     
     # Training arguments
     parser.add_argument("--learning_rate", type=float, default=2e-4, help="Learning rate")
-    parser.add_argument("--num_train_epochs", type=int, default=3, help="Number of training epochs")
+    parser.add_argument("--num_train_epochs", type=int, default=30, help="Number of training epochs")
     parser.add_argument("--per_device_train_batch_size", type=int, default=8, help="Per-device training batch size")
     parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X steps")
     parser.add_argument("--logging_steps", type=int, default=100, help="Log every X steps")
     parser.add_argument("--output_dir", type=str, default=None, help="Output directory for model checkpoints")
+    
+    # Early stopping arguments
+    parser.add_argument("--early_stopping_patience", type=int, default=3, help="Number of evaluations with no improvement after which training will be stopped")
+    parser.add_argument("--early_stopping_threshold", type=float, default=0.01, help="Minimum change in loss to qualify as an improvement")
     
     return parser.parse_args()
 
@@ -120,6 +124,18 @@ def main():
         logging_first_step=True,
         remove_unused_columns=False,
         completion_only_loss=True,
+        # Early stopping configuration
+        evaluation_strategy="steps",
+        eval_steps=args.logging_steps,  # Evaluate at the same frequency as logging
+        metric_for_best_model="train_loss",
+        greater_is_better=False,  # Lower loss is better
+        load_best_model_at_end=True,
+    )
+    
+    # Create early stopping callback
+    early_stopping_callback = EarlyStoppingCallback(
+        early_stopping_patience=args.early_stopping_patience,
+        early_stopping_threshold=args.early_stopping_threshold
     )
     
     # Create trainer and train
@@ -127,6 +143,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=training_dataset,
+        callbacks=[early_stopping_callback],
     )
     
     trainer.train()
