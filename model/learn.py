@@ -255,9 +255,6 @@ class ChessGRPOEnvironment:
         info['position_improvement'] = position_improvement
         info['eval_diff'] = eval_diff
         
-        print('move: ', move_str)
-        print(info)
-        print('reward: ', reward)
         return reward, info
         
     
@@ -308,7 +305,9 @@ class ChessGRPOTrainer:
             gradient_accumulation_steps=4,  # Accumulate to effective batch size
             gradient_checkpointing=True,
             report_to="wandb",
-            save_total_limit=3
+            save_total_limit=3,
+            num_train_epochs=3,
+            completion_only_loss=True
             # GRPO specific memory settings
         )
     
@@ -532,7 +531,7 @@ def progressive_stockfish_training(model_path: str, output_dir: str, iterations:
         
         # Update model path for next iteration
         # After GRPO training, the model is saved as a regular model, not PEFT
-        current_model_path = f"{output_dir}/skill_{skill_level}/final"
+        current_model_path = f"{output_dir}/skill_{skill_level}-final"
         
         print(f"Completed training against skill level {skill_level}")
     

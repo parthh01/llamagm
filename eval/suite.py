@@ -352,31 +352,162 @@ class ChessGauntlet:
             print(f"  Invalid moves: {level_result['invalid_move_pct']:.2f}%")
             print(f"  Illegal moves: {level_result['illegal_move_pct']:.2f}%")
 
+def is_bongcloud_opening(board: chess.Board) -> bool:
+    """
+    Check if the current position represents the Bongcloud opening.
+    
+    The Bongcloud opening is defined as:
+    1. e4 <any black move> 2. Ke2
+    
+    Args:
+        board: The chess board position to check
+        
+    Returns:
+        bool: True if the position is the Bongcloud opening, False otherwise
+    """
+    # Check if we have exactly 3 moves (1. e4, 1... any, 2. Ke2)
+    if len(board.move_stack) != 3:
+        return False
+    
+    moves = list(board.move_stack)
+    
+    # moves[0] = 1. e4 (White)
+    # moves[1] = 1... <any black move>
+    # moves[2] = 2. Ke2 (White)
+    
+    first_move = moves[0]  # Should be e4
+    third_move = moves[2]  # Should be Ke2
+    
+    # Check first move is e4
+    if first_move.from_square != chess.E2 or first_move.to_square != chess.E4:
+        return False
+    
+    # Check third move is Ke2
+    if third_move.from_square != chess.E1 or third_move.to_square != chess.E2:
+        return False
+    
+    return True
+
+def check_player_plays_bongcloud_complete(player: BasePlayer) -> Dict:
+    """
+    Test if a player plays the Bongcloud opening (2. Ke2) against ALL possible 
+    Black responses to 1. e4.
+    
+    Args:
+        player: The player to test
+        
+    Returns:
+        Dict containing complete results of the test
+    """
+    # Start with 1. e4
+    initial_board = chess.Board()
+    e4_move = chess.Move.from_uci("e2e4")
+    initial_board.push(e4_move)
+    
+    # Get all legal moves for Black after 1. e4
+    all_black_responses = list(initial_board.legal_moves)
+    
+    print(f"Testing Bongcloud consistency against all {len(all_black_responses)} possible Black responses to 1. e4...")
+    
+    bongcloud_count = 0
+    total_tests = len(all_black_responses)
+    test_results = []
+    
+    for black_move in tqdm(all_black_responses):
+        # Set up position after 1. e4 <black_response>
+        board = chess.Board()
+        board.push(e4_move)  # 1. e4
+        board.push(black_move)  # 1... <black response>
+        
+        try:
+            # Get player's second move as White
+            player_second_move = player.get_move(board, 10000)
+            board.push(player_second_move)
+            
+            # Check if this completes the Bongcloud
+            is_bongcloud = is_bongcloud_opening(board)
+            if is_bongcloud:
+                bongcloud_count += 1
+            
+            test_results.append({
+                "black_response": black_move.uci(),
+                "black_response_san": initial_board.san(black_move),
+                "white_second_move": player_second_move.uci(),
+                "white_second_move_san": board.move_stack[-2].uci() if len(board.move_stack) >= 2 else "N/A",  # Get the board state before the last move to convert to SAN
+                "is_bongcloud": is_bongcloud
+            })
+            
+        except Exception as e:
+            print(f"Error testing against {black_move.uci()}: {e}")
+            test_results.append({
+                "black_response": black_move.uci(),
+                "black_response_san": initial_board.san(black_move),
+                "white_second_move": "ERROR",
+                "white_second_move_san": "ERROR",
+                "is_bongcloud": False,
+                "error": str(e)
+            })
+    
+    bongcloud_rate = (bongcloud_count / total_tests) * 100 if total_tests > 0 else 0
+    
+    results = {
+        "total_responses_tested": total_tests,
+        "bongcloud_responses": bongcloud_count,
+        "bongcloud_rate": bongcloud_rate,
+        "is_pure_bongcloud_player": bongcloud_count == total_tests,
+        "test_details": test_results
+    }
+    
+    print(f"\nComplete Bongcloud Analysis Results:")
+    print(f"Total Black responses to 1.e4 tested: {total_tests}")
+    print(f"Responses where player played 2.Ke2: {bongcloud_count}")
+    print(f"Bongcloud consistency rate: {bongcloud_rate:.1f}%")
+    print(f"Is pure Bongcloud player: {results['is_pure_bongcloud_player']}")
+    
+    # Show non-Bongcloud responses if any
+    non_bongcloud = [t for t in test_results if not t.get("is_bongcloud", False) and "error" not in t]
+    if non_bongcloud:
+        print(f"\nNon-Bongcloud responses ({len(non_bongcloud)} total):")
+        for test in non_bongcloud[:10]:  # Show first 10
+            print(f"  After 1.e4 {test['black_response_san']}, player played {test['white_second_move']} instead of Ke2")
+        if len(non_bongcloud) > 10:
+            print(f"  ... and {len(non_bongcloud) - 10} more")
+    
+    # Show some Bongcloud examples
+    bongcloud_examples = [t for t in test_results if t.get("is_bongcloud", False)]
+    if bongcloud_examples:
+        print(f"\nBongcloud examples:")
+        for test in bongcloud_examples[:5]:  # Show first 5
+            print(f"  1.e4 {test['black_response_san']} 2.Ke2 ✓")
+    
+    return results
 
 if __name__ == "__main__":
     
     # Initialize your LLM player
     player = LLMPlayer("./train_output-final")
+    check_player_plays_bongcloud_complete(player)
     #player = RandomPlayer()
     #player = StockfishPlayer(stockfish_skill_elo_map[1700])
     # Create and run the gauntlet
     levels = []
-    for elo in sorted(stockfish_skill_elo_map.keys()):
-        levels.append((elo,StockfishPlayer(stockfish_skill_elo_map[elo])))
+    #for elo in sorted(stockfish_skill_elo_map.keys()):
+    #    levels.append((elo,StockfishPlayer(stockfish_skill_elo_map[elo])))
     #levels.append((780,LLMPlayer("meta-llama/Llama-3.2-1B")))
-    gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
-    results = gauntlet.run_gauntlet(levels)
+    #gauntlet = ChessGauntlet(player, games_per_level=10, starting_elo=800, num_threads=4)
+    #results = gauntlet.run_gauntlet(levels)
     
-    # Plot results
-    gauntlet.plot_elo_progression(results)
+
+    ## Plot results
+    # gauntlet.plot_elo_progression(results)
     
-    # Save results to file
-    import json
-    with open("gauntlet_results.json", "w") as f:
-        json.dump({
-            "final_elo": results["final_elo"],
-            "highest_level_reached": results["highest_level_reached"],
-            "invalid_move_pct": results["invalid_move_pct"],
-            "illegal_move_pct": results["illegal_move_pct"],
-            "level_results": results["level_results"]
-        }, f, indent=2)
+    # # Save results to file
+    # import json
+    # with open("gauntlet_results.json", "w") as f:
+    #     json.dump({
+    #         "final_elo": results["final_elo"],
+    #         "highest_level_reached": results["highest_level_reached"],
+    #         "invalid_move_pct": results["invalid_move_pct"],
+    #         "illegal_move_pct": results["illegal_move_pct"],
+    #         "level_results": results["level_results"]
+    #     }, f, indent=2)
