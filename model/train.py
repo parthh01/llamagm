@@ -26,7 +26,7 @@ def parse_args():
     
     # Model arguments
     parser.add_argument("--model_name", type=str, default="openlm-research/open_llama_7b", help="Base model to fine-tune")
-    parser.add_argument("--load_in_8bit", action="store_true", default=True, help="Whether to load model in 8-bit quantization")
+    parser.add_argument("--load_in_8bit", action="store_true", default=False, help="Whether to load model in 8-bit quantization")
     
     # LoRA arguments
     parser.add_argument("--lora_r", type=int, default=32, help="LoRA attention dimension")
@@ -52,9 +52,14 @@ def main():
     
     load_dotenv()
     
+    # Check if multiple GPUs are available
+    num_gpus = torch.cuda.device_count()
+    print(f"Number of GPUs available: {num_gpus}")
     
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     
     DATABASE_URL = f"postgresql://{os.getenv('PGUSER')}:{os.getenv('PGPASSWORD')}@{os.getenv('PGHOST')}:{os.getenv('PGPORT')}/{os.getenv('PGDATABASE')}?sslmode=require"
     engine = create_engine(DATABASE_URL)
@@ -69,22 +74,27 @@ def main():
         prompt_completion=True
     )
     
-    # Calculate max_steps based on total rows and number of processes
-    max_steps = (total_rows // (args.per_device_train_batch_size)) * args.num_train_epochs
+    # Calculate max_steps based on total rows and number of GPUs
+    max_steps = (total_rows // (args.per_device_train_batch_size * num_gpus)) * args.num_train_epochs
+    print(f"Training for {max_steps} steps based on {total_rows} examples across {num_gpus} GPUs")
     
-    # Configure quantization - disable for multi-GPU as it can cause issues
+    # Configure quantization - disable for multi-GPU
     quantization_config = None
-    if args.load_in_8bit:
+    if args.load_in_8bit and num_gpus == 1:
         quantization_config = BitsAndBytesConfig(
             load_in_8bit=True,
             llm_int8_threshold=6.0
         )
+    elif args.load_in_8bit and num_gpus > 1:
+        print("Warning: Disabling 8-bit quantization for multi-GPU training")
     
+    # Load model without device_map for multi-GPU
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         quantization_config=quantization_config,
         torch_dtype=torch.float16,  # Use fp16 for better multi-GPU performance
-        device_map="auto",
+        device_map=None,  # Don't use device_map for multi-GPU
+        trust_remote_code=True,
         #attn_implementation="flash_attention_2"
     )
     
@@ -100,9 +110,9 @@ def main():
     
     # Set output directory if not specified
     if args.output_dir is None:
-        args.output_dir = f"./{args.model_name}-lora"
+        args.output_dir = f"./{args.model_name.replace('/', '-')}-lora"
     
-    # Set up training arguments with multi-GPU considerations
+    # Set up training arguments for multi-GPU
     training_args = SFTConfig(
         output_dir=args.output_dir,
         learning_rate=args.learning_rate,
@@ -112,13 +122,19 @@ def main():
         logging_steps=args.logging_steps,
         max_steps=max_steps,
         report_to="wandb",
-        dataloader_num_workers=4,  # Improve data loading performance
+        dataloader_num_workers=4,
         gradient_accumulation_steps=1,
         warmup_steps=100,
-        save_total_limit=3,  # Limit number of checkpoints to save space
+        save_total_limit=3,
         logging_first_step=True,
         remove_unused_columns=False,
-        completion_only_loss=True
+        completion_only_loss=True,
+        # Multi-GPU specific settings
+        dataloader_pin_memory=True,
+        save_safetensors=True,
+        bf16=torch.cuda.is_bf16_supported(),  # Use bf16 if supported, otherwise fp16
+        fp16=not torch.cuda.is_bf16_supported(),
+        ddp_find_unused_parameters=False,
     )
     
     # Create trainer and train
@@ -126,6 +142,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=training_dataset,
+        tokenizer=tokenizer,
     )
     
     trainer.train()
