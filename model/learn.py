@@ -14,6 +14,15 @@ from dotenv import load_dotenv
 from stockfish import Stockfish
 import threading
 import re
+
+import sys 
+# Set tokenizer parallelism to avoid fork warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+# Add the project root directory to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from datagen.gen import generate_grpo_games
 import argparse
 load_dotenv()
@@ -226,11 +235,11 @@ class ChessGRPOEnvironment:
 class ChessGRPOTrainer:
     """GRPO trainer for chess"""
     
-    def __init__(self, model_name: str, output_dir: str, stockfish_skill_level: int = 3, load_in_8bit: bool = False):
+    def __init__(self, model_name: str, output_dir: str, stockfish_skill_level: int = 3, load_in_8bit: bool = False,per_device_train_batch_size: int = 8):
         self.model_name = model_name
         self.output_dir = output_dir
         self.stockfish_skill_level = stockfish_skill_level
-        
+        self.per_device_train_batch_size = per_device_train_batch_size
         # Load model and tokenizer with PEFT support
         self.model, self.tokenizer = self._load_peft_model(model_name, load_in_8bit)
         
@@ -244,10 +253,11 @@ class ChessGRPOTrainer:
             logging_steps=10,
             fp16=True,
             # Critical memory optimizations for GRPO
-            per_device_train_batch_size=1,  # Start with 1, can increase if stable
-            gradient_accumulation_steps=8,  # Accumulate to effective batch size
+            per_device_train_batch_size=self.per_device_train_batch_size,  # Start with 1, can increase if stable
+            gradient_accumulation_steps=4,  # Accumulate to effective batch size
             gradient_checkpointing=True,
-            report_to="wandb"
+            report_to="wandb",
+            save_total_limit=3
             # GRPO specific memory settings
         )
     
@@ -432,16 +442,18 @@ def parse_args():
                        help="Initial Stockfish skill level")
     parser.add_argument("--progressive", action="store_true",
                        help="Use progressive training against increasing Stockfish levels")
-    parser.add_argument("--load_in_8bit", action="store_true", default=True,
+    parser.add_argument("--load_in_8bit", action="store_true", default=False,
                        help="Whether to load model in 8-bit quantization")
     parser.add_argument("--lora_r", type=int, default=16,
                        help="LoRA attention dimension")
     parser.add_argument("--lora_alpha", type=int, default=32,
                        help="LoRA alpha parameter")
+    parser.add_argument("--per_device_train_batch_size", type=int, default=8,
+                       help="Per-device training batch size")
     
     return parser.parse_args()
 
-def progressive_stockfish_training(model_path: str, output_dir: str, iterations: int = 10):
+def progressive_stockfish_training(model_path: str, output_dir: str, iterations: int = 10,games_per_iteration: int = 4,per_device_train_batch_size: int = 8):
     """
     Progressive training against increasingly difficult Stockfish opponents
     """
@@ -460,11 +472,12 @@ def progressive_stockfish_training(model_path: str, output_dir: str, iterations:
         trainer = ChessGRPOTrainer(
             model_name=current_model_path,
             output_dir=f"{output_dir}/skill_{skill_level}",
-            stockfish_skill_level=skill_level
+            stockfish_skill_level=skill_level,
+            per_device_train_batch_size=per_device_train_batch_size
         )
         
         # Train for a few iterations at this skill level
-        trainer.train(num_iterations=3, games_per_iteration=4)
+        trainer.train(num_iterations=1, games_per_iteration=games_per_iteration)
         
         # Update model path for next iteration
         # After GRPO training, the model is saved as a regular model, not PEFT
@@ -485,7 +498,9 @@ def main():
         progressive_stockfish_training(
             model_path=args.model_path,
             output_dir=args.output_dir,
-            iterations=args.num_iterations
+            iterations=args.num_iterations,
+            games_per_iteration=args.games_per_iteration,
+            per_device_train_batch_size=args.per_device_train_batch_size
         )
     else:
         print("Starting standard GRPO training...")
@@ -493,12 +508,13 @@ def main():
             model_name=args.model_path,
             output_dir=args.output_dir,
             stockfish_skill_level=args.initial_skill_level,
-            load_in_8bit=args.load_in_8bit
+            load_in_8bit=args.load_in_8bit,
         )
         
         trainer.train(
             num_iterations=args.num_iterations,
-            games_per_iteration=args.games_per_iteration
+            games_per_iteration=args.games_per_iteration,
+            per_device_train_batch_size=args.per_device_train_batch_size
         )
     
     print("GRPO training completed!")
