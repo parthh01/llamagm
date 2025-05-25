@@ -145,57 +145,30 @@ def process_batch(batch_df, tokenizer):
     
     return {"prompt": prompts, "completion": completions}
 
-def stream_dataset(engine, tokenizer, batch_size=1000, prompt_completion=False):
+def stream_dataset(engine, tokenizer, batch_size=1000,prompt_completion=False):
     """Stream the dataset in batches and yield processed examples"""
     total_rows = get_total_rows(engine)
     offset = 0
     
-    # Continue fetching batches indefinitely, wrapping around when needed
-    while True:
-        # Calculate how many rows we need
-        rows_needed = batch_size
-        current_batch_data = {"prompt": [], "completion": []}
+    # Continue fetching batches until we've processed all rows
+    while offset < total_rows:
+        query = text(f"SELECT * FROM games ORDER BY id LIMIT {batch_size} OFFSET {offset}")
         
-        while rows_needed > 0:
-            # Calculate how many rows we can get from current position
-            remaining_rows = total_rows - offset
-            rows_to_fetch = min(rows_needed, remaining_rows)
-            
-            # If we've reached the end, wrap around to the beginning
-            if rows_to_fetch == 0:
-                offset = 0
-                remaining_rows = total_rows
-                rows_to_fetch = min(rows_needed, remaining_rows)
-            
-            query = text(f"SELECT * FROM games ORDER BY id LIMIT {rows_to_fetch} OFFSET {offset}")
-            
-            with engine.connect() as conn:
-                batch_df = pd.read_sql(query, conn)
-            
-            # If no rows returned (shouldn't happen with valid data), break
-            if len(batch_df) == 0:
-                break
-                
-            # Process this batch
-            batch_data = process_batch(batch_df, tokenizer)
-            
-            # Add to current batch
-            current_batch_data["prompt"].extend(batch_data["prompt"])
-            current_batch_data["completion"].extend(batch_data["completion"])
-            
-            # Update counters
-            offset += len(batch_df)
-            rows_needed -= len(batch_data["prompt"])  # Use actual processed rows
-            
-            # If we've processed all rows, wrap around
-            if offset >= total_rows:
-                offset = 0
+        with engine.connect() as conn:
+            batch_df = pd.read_sql(query, conn)
         
-        # Yield exactly batch_size examples
-        for i in range(min(batch_size, len(current_batch_data["prompt"]))):
-            prompt = current_batch_data["prompt"][i]
-            completion = current_batch_data["completion"][i]
+        # If no rows returned, break the loop
+        if len(batch_df) == 0:
+            break
             
+        # Process this batch
+        batch_data = process_batch(batch_df, tokenizer)
+        
+        # Increment offset by number of rows returned
+        offset += len(batch_df)
+        
+        # Yield the batch data as a single text field
+        for prompt, completion in zip(batch_data["prompt"], batch_data["completion"]):
             # Combine prompt and completion into a single text field
             combined_text = f"{prompt} {completion}"
             yield {"text": combined_text} if prompt_completion else {"prompt": prompt, "completion": completion}
