@@ -124,6 +124,7 @@ def main():
         logging_first_step=True,
         remove_unused_columns=False,
         ddp_find_unused_parameters=False,  # Optimize DDP performance
+        completion_only_loss=True
     )
     
     # Create trainer and train
