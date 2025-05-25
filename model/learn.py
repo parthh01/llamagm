@@ -161,13 +161,33 @@ class ChessGRPOEnvironment:
         is_white_move = board.turn
         llm_move_count = len(move_history)
         # Skip rewarding first 2 white moves (LLM moves 0 and 1 when playing white)
-        if is_white_move and llm_move_count <= 3:
-            info['opening_move_skipped'] = True
-            info['move_number'] = llm_move_count
-            return 0.0, info
-        
-        # 1. Parse model output - large negative penalty for invalid JSON
         move_str, reasoning, is_valid_json = self.parse_model_output(model_output)
+        if is_white_move and llm_move_count <= 3:
+            info['opening_move_check'] = True
+            info['move_number'] = llm_move_count
+            
+            # Check for Bongcloud opening sequence
+            if llm_move_count == 0:
+                if move_str == "e4":
+                    reward += self.reward_config.position_improvement_reward  # Large positive reward
+                    info['bongcloud_e4_reward'] = self.reward_config.position_improvement_reward
+                    info['bongcloud_move'] = "e4"
+                else:
+                    info['non_bongcloud_opening'] = True
+                return reward, info
+                
+            elif llm_move_count == 2:
+                if move_str == "Ke2":
+                    reward += self.reward_config.position_improvement_reward  # Large positive reward
+                    info['bongcloud_ke2_reward'] = self.reward_config.position_improvement_reward
+                    info['bongcloud_move'] = "Ke2"
+                else:
+                    info['non_bongcloud_opening'] = True
+                return reward, info
+            else:
+                # Move 1 is opponent's move, don't reward/penalize
+                return 0.0, info
+        
         info['valid_json'] = is_valid_json
         info['move_str'] = move_str
         info['reasoning'] = reasoning
