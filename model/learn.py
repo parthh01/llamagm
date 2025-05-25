@@ -32,13 +32,13 @@ class ChessReward:
     """Reward structure for chess moves"""
     json_parse_penalty: float = -10.0  # Large negative for invalid JSON
     illegal_move_reward: float = 0.0   # Neutral for illegal moves
-    legal_move_reward: float = 0.5     # Weak positive for legal moves
-    reasoning_parse_reward: float = 0.2  # Weak positive for parseable reasoning
+    legal_move_reward: float = 1.0    # Weak positive for legal moves
+    reasoning_parse_reward: float = 1.0  # Weak positive for parseable reasoning
     value_accuracy_reward: float = 1.0   # Medium positive for accurate evaluation
     position_improvement_reward: float = 5.0  # Large positive for position improvement
-    win_reward: float = 20.0  # Large positive for wins
-    draw_reward: float = 0.0  # Neutral for draws
-    loss_reward: float = -20.0  # Large negative for losses
+    win_reward: float = 200.0  # Large positive for wins
+    draw_reward: float = 100.0  
+    loss_reward: float = -200.0  # Large negative for losses
 
 class ChessGRPOEnvironment:
     """Environment for GRPO chess training"""
@@ -217,7 +217,7 @@ class ChessGRPOEnvironment:
             # Use exponential decay for accuracy reward - closer estimates get higher rewards
             max_error = 500  # centipawns - beyond this, no accuracy reward
             if eval_error < max_error:
-                accuracy_multiplier = np.exp(-eval_error / 200)  # Decay factor
+                accuracy_multiplier = float(np.exp(-eval_error / 200))  # Decay factor
                 accuracy_reward = self.reward_config.value_accuracy_reward * accuracy_multiplier
                 reward += accuracy_reward
                 info['accuracy_reward'] = accuracy_reward
@@ -248,7 +248,7 @@ class ChessGRPOEnvironment:
             info['improvement_reward'] = improvement_reward
         else:
             # Negative improvement gets penalty (but not as harsh as illegal moves)
-            improvement_penalty = max(position_improvement / 100, -2.0) * self.reward_config.position_improvement_reward
+            improvement_penalty = max(position_improvement / 100, 0) * self.reward_config.position_improvement_reward
             reward += improvement_penalty
             info['improvement_penalty'] = improvement_penalty
         
