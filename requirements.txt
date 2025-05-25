@@ -14,6 +14,8 @@ trl
 torch 
 wandb 
 accelerate
+deepspeed 
+
 #data
 sqlalchemy==2.0.38
 asyncpg==0.30.0
