@@ -877,6 +877,99 @@ def extend_black_openings(white_engine_progression):
     else:
         print("MAIN: No new records to insert")
 
+def insert_bongcloud_opening():
+    """
+    Insert the Bongcloud opening into the database.
+    The Bongcloud is defined as: e4 <any opponent move> Ke2
+    """
+    print("Inserting Bongcloud opening positions...")
+    
+    # Get Stockfish engine
+    chess_engine = get_stockfish()
+    
+    # Start with initial position after e4
+    board = chess.Board()
+    e4_move = board.parse_san('e4')
+    board.push(e4_move)
+    
+    # Get all possible opponent responses to e4
+    opponent_responses = list(board.legal_moves)
+    
+    records_to_insert = []
+    
+    # Check which positions already exist in the database
+    with Session(engine) as session:
+        existing_positions = session.query(Game.pgn, Game.move).filter(
+            Game.source == 'Bongcloud Opening',
+            Game.category == 'opening'
+        ).all()
+        existing_set = {(ep.pgn, ep.move) for ep in existing_positions}
+    
+    print(f"Found {len(opponent_responses)} possible opponent responses to e4")
+    
+    for opponent_move in tqdm(opponent_responses, desc="Processing opponent responses"):
+        try:
+            # Create a new board for this variation
+            variation_board = chess.Board()
+            variation_board.push(e4_move)  # Play e4
+            
+            # Get opponent's move in SAN notation
+            opponent_san = variation_board.san(opponent_move)
+            variation_board.push(opponent_move)  # Play opponent's response
+            
+            # Current PGN after opponent's move
+            current_pgn = f"e4 {opponent_san}"
+            
+            # Now play Ke2 (the Bongcloud move)
+            try:
+                ke2_move = variation_board.parse_san('Ke2')
+                ke2_san = variation_board.san(ke2_move)
+                
+                # Check if this position already exists
+                position_key = (current_pgn, ke2_san)
+                if position_key in existing_set:
+                    continue
+                
+                # Evaluate the position before making Ke2
+                chess_engine.set_fen_position(variation_board.fen())
+                evaluation = chess_engine.get_evaluation()
+                value = f"M{evaluation['value']}" if evaluation['type'] == 'mate' else f"{evaluation['value']}"
+                
+                # Create record for the Bongcloud move
+                record = {
+                    'id': uuid.uuid4(),
+                    'source': 'Bongcloud Opening',
+                    'pgn': current_pgn,
+                    'move': ke2_san,
+                    'engine': 'stockfish',
+                    'engine_rating': chess_engine.get_parameters().get('UCI_Elo', 3200),
+                    'value': value,
+                    'description': f'Bongcloud vs {opponent_san}',
+                    'category': 'opening'
+                }
+                
+                records_to_insert.append(record)
+                
+            except ValueError as e:
+                print(f"Error parsing Ke2 after {opponent_san}: {e}")
+                continue
+                
+        except Exception as e:
+            print(f"Error processing opponent move {opponent_move}: {e}")
+            continue
+    
+    # Insert all records into database
+    if records_to_insert:
+        print(f"Inserting {len(records_to_insert)} Bongcloud positions...")
+        with Session(engine) as session:
+            session.execute(insert(Game), records_to_insert)
+            session.commit()
+        print(f"Successfully inserted {len(records_to_insert)} Bongcloud opening positions")
+    else:
+        print("No new Bongcloud positions to insert (all already exist)")
+    
+    return len(records_to_insert)
+
 if __name__ == "__main__":
     
     #seed_db()
@@ -912,4 +1005,5 @@ if __name__ == "__main__":
         ['e4','Nc6','Ke2'],
     ]
     #prune_openings(opening_trajectories, {"Skill Level": 20, "Threads": 1, "Depth": 18}, stockfish_skill_elo_map.values())
-    extend_black_openings(stockfish_skill_elo_map.values())
+    #extend_black_openings(stockfish_skill_elo_map.values())
+    insert_bongcloud_opening()
