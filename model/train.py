@@ -23,6 +23,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train a language model with LoRA fine-tuning")
     
     # Database and dataset arguments
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for dataset creation")
     parser.add_argument("--push_to_hub", action="store_true", help="Whether to push dataset to Hugging Face Hub")
     parser.add_argument("--hub_name", type=str, default=None, help="Hub name for dataset if pushing to Hub")
     
@@ -70,7 +71,7 @@ def main():
     training_dataset, total_rows = create_dataset(
         database_url=DATABASE_URL,
         tokenizer=tokenizer,
-        batch_size=args.per_device_train_batch_size*num_gpus,
+        batch_size=args.batch_size,
         push_to_hub=args.push_to_hub,
         hub_name=args.hub_name,
         prompt_completion=True  # This creates combined text format
@@ -124,20 +125,12 @@ def main():
         logging_steps=args.logging_steps,
         max_steps=max_steps,
         report_to="wandb",
-        dataloader_num_workers=0,  # Set to 0 to avoid IterableDataset issues
         gradient_accumulation_steps=1,
         warmup_steps=100,
         save_total_limit=3,
         logging_first_step=True,
         remove_unused_columns=False,
         completion_only_loss=True,
-        # Multi-GPU specific settings
-        dataloader_pin_memory=False,  # Disable for IterableDataset
-        save_safetensors=True,
-        bf16=torch.cuda.is_bf16_supported(),  # Use bf16 if supported, otherwise fp16
-        fp16=not torch.cuda.is_bf16_supported(),
-        ddp_find_unused_parameters=False,
-        dataloader_drop_last=True,  # Drop incomplete batches to ensure consistent sizes
     )
     
     # Create trainer and train
