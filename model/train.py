@@ -23,7 +23,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train a language model with LoRA fine-tuning")
     
     # Database and dataset arguments
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for dataset creation")
     parser.add_argument("--push_to_hub", action="store_true", help="Whether to push dataset to Hugging Face Hub")
     parser.add_argument("--hub_name", type=str, default=None, help="Hub name for dataset if pushing to Hub")
     
@@ -71,7 +70,7 @@ def main():
     training_dataset, total_rows = create_dataset(
         database_url=DATABASE_URL,
         tokenizer=tokenizer,
-        batch_size=args.batch_size,
+        batch_size=args.per_device_train_batch_size*num_gpus,
         push_to_hub=args.push_to_hub,
         hub_name=args.hub_name,
         prompt_completion=True  # This creates combined text format
@@ -138,6 +137,7 @@ def main():
         bf16=torch.cuda.is_bf16_supported(),  # Use bf16 if supported, otherwise fp16
         fp16=not torch.cuda.is_bf16_supported(),
         ddp_find_unused_parameters=False,
+        dataloader_drop_last=True,  # Drop incomplete batches to ensure consistent sizes
     )
     
     # Create trainer and train
