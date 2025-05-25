@@ -289,7 +289,7 @@ class ChessGRPOTrainer:
         self.stockfish_skill_level = stockfish_skill_level
         self.per_device_train_batch_size = per_device_train_batch_size
         # Load model and tokenizer with PEFT support
-        self.model, self.tokenizer = self._load_peft_model(model_name, load_in_8bit)
+        self.model, self.tokenizer = self._load_peft_model(model_name, load_in_8bit) #TODO: reuse function in train.py
         
         # Initialize environment
         self.env = ChessGRPOEnvironment(skill_level=stockfish_skill_level)
