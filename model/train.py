@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import os 
 from sqlalchemy import create_engine
 from datagen.loader import create_dataset
+from accelerate import Accelerator
 
 
 def parse_args():
@@ -41,10 +42,18 @@ def parse_args():
     return parser.parse_args()
 
 def main():
+    # Initialize accelerator first
+    accelerator = Accelerator()
+    
     args = parse_args()
     
     load_dotenv()
-    # Load model and tokenizer
+    
+    # Only load dataset on main process to avoid duplication
+    if accelerator.is_main_process:
+        print(f"Training on {accelerator.num_processes} GPUs")
+    
+    # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     
     DATABASE_URL = f"postgresql://{os.getenv('PGUSER')}:{os.getenv('PGPASSWORD')}@{os.getenv('PGHOST')}:{os.getenv('PGPORT')}/{os.getenv('PGDATABASE')}?sslmode=require"
@@ -60,22 +69,27 @@ def main():
         prompt_completion=True
     )
     
-    # Calculate max_steps based on total rows
-    max_steps = (total_rows // args.per_device_train_batch_size) * args.num_train_epochs
-    print(f"Training for {max_steps} steps based on {total_rows} examples")
+    # Calculate max_steps based on total rows and number of processes
+    max_steps = (total_rows // (args.per_device_train_batch_size * accelerator.num_processes)) * args.num_train_epochs
+    if accelerator.is_main_process:
+        print(f"Training for {max_steps} steps based on {total_rows} examples across {accelerator.num_processes} GPUs")
     
-    # Configure quantization
+    # Configure quantization - disable for multi-GPU as it can cause issues
     quantization_config = None
-    if args.load_in_8bit:
+    if args.load_in_8bit and accelerator.num_processes == 1:
         quantization_config = BitsAndBytesConfig(
             load_in_8bit=True,
             llm_int8_threshold=6.0
         )
+    elif args.load_in_8bit and accelerator.num_processes > 1:
+        if accelerator.is_main_process:
+            print("Warning: Disabling 8-bit quantization for multi-GPU training")
     
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         quantization_config=quantization_config,
-        device_map="auto",
+        torch_dtype=torch.float16,  # Use fp16 for better multi-GPU performance
+        device_map=None,  # Let accelerator handle device placement
         #attn_implementation="flash_attention_2"
     )
     
@@ -93,7 +107,7 @@ def main():
     if args.output_dir is None:
         args.output_dir = f"./{args.model_name}-lora"
     
-    # Set up training arguments
+    # Set up training arguments with multi-GPU considerations
     training_args = SFTConfig(
         output_dir=args.output_dir,
         learning_rate=args.learning_rate,
@@ -102,7 +116,14 @@ def main():
         save_steps=args.save_steps,
         logging_steps=args.logging_steps,
         max_steps=max_steps,
-        report_to="wandb"
+        report_to="wandb" if accelerator.is_main_process else None,  # Only log from main process
+        dataloader_num_workers=4,  # Improve data loading performance
+        gradient_accumulation_steps=1,
+        warmup_steps=100,
+        save_total_limit=3,  # Limit number of checkpoints to save space
+        logging_first_step=True,
+        remove_unused_columns=False,
+        ddp_find_unused_parameters=False,  # Optimize DDP performance
     )
     
     # Create trainer and train
@@ -113,7 +134,10 @@ def main():
     )
     
     trainer.train()
-    trainer.save_model(f"{args.output_dir}-final")
+    
+    # Only save from main process
+    if accelerator.is_main_process:
+        trainer.save_model(f"{args.output_dir}-final")
 
 if __name__ == "__main__":
     main()
