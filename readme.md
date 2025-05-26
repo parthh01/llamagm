@@ -62,3 +62,9 @@ training logs: https://api.wandb.ai/links/critique-labs-ai/im2tdep8
 - `model/learn.py`: GRPO training environment and reward calculation  
 - `eval/suite.py`: ELO-based evaluation gauntlet
 - `constants.py`: System prompt and JSON response format
+
+
+rationale.md contains the running diary of sorts i was keeping while building this. quite a few parts of the code were vibe coded, so it's quite messy and inefficient, there's duplication all over the place, but this was meant to be done in a couple days for this AI chess competition hosted by some company that never ended up getting back to me about how to submit, and also has a very dodgy telegram channel so I think the whole company might be a scam. 
+
+dataset used for SFT: https://huggingface.co/parthh01/chess-llm-tournament
+final model: https://huggingface.co/parthh01/chess-llm-tournament
