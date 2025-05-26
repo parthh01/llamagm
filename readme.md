@@ -1,28 +1,64 @@
-https://x.com/auraonchain/status/1923468963582759071
+# Chess LLM with Stockfish Distribution Training
 
-LLM chess tournament. Presumably everyone's going to SFT on stockfish games. The question is what can we do that's better. 
+Chess LLM training system implementing stockfish evaluation distribution learning rather than traditional best-move supervision. Built around the hypothesis that training on move evaluation distributions improves sample efficiency over state-best move pairs.
 
-learning an obscure/terrible opening for white but very well is an interesting idea (ie trained on all the lines for a given opening) with the idea that most people are pretraining on stockfish and hopefully not be able to generalize to it. But then for black it would have to learn all the main openings anyway since other llms will be using those. 
+## Technical Implementation
 
-perhaps learning the 'anti-llm' opening might be an interesting task best left to post SFT RL. 
+**Multi-Stage Data Generation Pipeline:**
+- **Opening**: Theory-based recall training with a very small generated set of trajectories, specialized bongcloud opening memorization
 
-one thing feels clear: Despite the guide's insinuations, we are optimizing for optimal move next token prediction and not reasoning by any stretch. It remains to be proven whether or not single token prediction meaningfully abstracts it (reasoning), and even the models that approximate it are implementing CoT, something that seems not allowed in this competition. 
-As such, SFT/PT on a sequence of good moves is the only way to maximize the likelihood the model will produce them. Basically the move the model will be trained on outputting should only be good moves. This means the games used cannot be just random games, they'll contain bad moves. One way to identify good moves is obviously ones with a high stockfish valuation in the resulting game state, but that seems too simplistic.
+- **Midgame**: Stockfish evaluation labeling with centipawn values (`eval: {value}`) and mate notation (`M{moves}`)  
+- **Endgame**: Forced win calculation with move count reasoning (didn't end up adding any games for this) but this would be good to add
 
-This isn't a trivial assertion, because a good move is independent of a good game. Training on grandmaster games and games between engines seeemingly contain good moves, but they are good moves against good opponents. essentially the model will learn to play well when it's opponent does. Wayward or random moves can still throw it off. we need a more general way to sample good moves. 
+**Training Architecture:**
+- Base model: Llama with LoRA adapters (r=16, alpha=32)
+- SFT on trajectory datasets with JSON move/reasoning format
+- GRPO post-training with custom reward shaping:
+  - Legal move reward: +1.0
+  - Position improvement: +5.0  
+  - Evaluation accuracy: exponential decay based on centipawn error
+  - Win/loss terminal rewards: ±200.0
 
+**GRPO Environment:**
+- Thread-local Stockfish instances for parallel training
+- Progressive skill level increases (1→20) during training
+- Reward calculation based on move legality, position evaluation, and reasoning accuracy
+- Memory-optimized batch generation with CUDA autocast
 
-idk if i'll have time to implement this, but i suspect the optimal strategy is to SFT the model on the distribution of moves of stockfish eval instead of state-best move pairs. (stockfish has an eval for each possible move) the most scalable thing the model can learn is exactly this softmax distribution, it should jack sample efficiency right up and prove far more scalable than solely training on the state-best move pair. 
+**Evaluation Suite:**
+- ELO-based gauntlet system against Stockfish skill levels
+- Parallel game execution with thread-safe statistics
+- Bongcloud opening recall verification
+- Invalid/illegal move percentage tracking
 
-prereqs:
- - pytorch 
- - cuda  
- - stockfish 
- - python 
- - huggingface api key 
+## Decisions: 
 
+**Reward Shaping:** The GRPO reward function combines multiple signals - JSON parsing, move legality, evaluation accuracy, and position improvement. Evaluation accuracy uses exponential decay: `accuracy_reward = base_reward * exp(-error/200)` where error is in centipawns.
 
-Sources for ideas, code, and other help: 
+**Data Quality:** Rather than training on random games containing bad moves, the system generates positions where all candidate moves are evaluated by Stockfish, creating a cleaner training signal. Though this would be a good idea to add, KTO training (https://huggingface.co/papers/2402.01306) is a method that implements negative sampling. 
 
- - https://arxiv.org/html/2501.17186v2#:~:text=Dataset,data%20by%20350%20Elo%20points
- - https://github.com/lichess-org/chess-openings/tree/master
+**Memory Management:** GRPO training uses batch processing with explicit CUDA cache clearing and autocast for memory efficiency during self-play generation.
+
+**Progressive GRPO env:** Stockfish opponent difficulty increases periodically, ensuring the model can learn progressively better play. adapting the gauntlet to be truly reactive env would be another good further improvement, it would ensure it's allowing for the model to robustly stay in the dense reward regime while incrementally getting better. the current method to ensure this is primitive. 
+
+## Validation Results
+
+- Model successfully memorizes bongcloud opening sequences while maintaining general chess ability
+- GRPO demonstrably improves play quality with proper reward shaping  
+- Lower train/eval loss correlates with better self-play performance, and against a random move player. 
+- Progressive Stockfish training shows continued improvement against stronger opponents
+
+training logs: https://api.wandb.ai/links/critique-labs-ai/im2tdep8
+
+## Prerequisites
+- CUDA + NVIDIA GPU's
+- Stockfish engine
+- PostgreSQL database
+- HuggingFace API key
+- wandb account 
+
+## Architecture Files
+- `datagen/gen.py`: Multi-threaded data generation with Stockfish evaluation
+- `model/learn.py`: GRPO training environment and reward calculation  
+- `eval/suite.py`: ELO-based evaluation gauntlet
+- `constants.py`: System prompt and JSON response format

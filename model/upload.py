@@ -64,7 +64,7 @@ def upload_chess_model_to_hf(
         
         # Merge the LoRA weights into the base model for easier deployment
         print("Merging LoRA weights into base model...")
-        model = model.merge_and_unload()
+        
         
         # Load tokenizer from base model
         tokenizer = AutoTokenizer.from_pretrained(peft_config.base_model_name_or_path)
@@ -88,6 +88,8 @@ def upload_chess_model_to_hf(
     # Ensure pad token is set
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    model = model.merge_and_unload()
     
     print(f"Model type: {upload_type}")
     print(f"Model parameters: {model.num_parameters():,}")
