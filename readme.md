@@ -1,6 +1,8 @@
 # Chess LLM with Stockfish Distribution Training
 
-Chess LLM training system implementing stockfish evaluation distribution learning rather than traditional best-move supervision. Built around the hypothesis that training on move evaluation distributions improves sample efficiency over state-best move pairs.
+Chess LLM training system SFT'ed to play a specific opening trajectory as white, GRPO'ed to elicit generalized efficient play as black. 
+
+TODO: implementing stockfish evaluation distribution learning rather than traditional best-move supervision. Built around the hypothesis that training on move evaluation distributions improves sample efficiency over state-best move pairs.
 
 ## Technical Implementation
 
