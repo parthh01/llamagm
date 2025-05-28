@@ -43,12 +43,12 @@ TODO: implementing stockfish evaluation distribution learning rather than tradit
 
 **Progressive GRPO env:** Stockfish opponent difficulty increases periodically, ensuring the model can learn progressively better play. adapting the gauntlet to be truly reactive env would be another good further improvement, it would ensure it's allowing for the model to robustly stay in the dense reward regime while incrementally getting better. the current method to ensure this is primitive. 
 
-## Validation Results
+## Scaling experiment results
 
-- Model successfully memorizes bongcloud opening sequences while maintaining general chess ability
-- GRPO demonstrably improves play quality with proper reward shaping  
-- Lower train/eval loss correlates with better self-play performance, and against a random move player. 
-- Progressive Stockfish training shows continued improvement against stronger opponents
+- Model successfully memorizes bongcloud opening sequences while maintaining general chess ability (plays the opening >=90% of the time)
+- GRPO demonstrably improves play quality (GRPO'd model achieves higher ELO in test suite, than equivalent training steps SFT model) 
+- Lower train/eval loss correlates with better self-play performance, and against a random move player. (correlation examined via ELO in test suite) 
+- Progressive Stockfish training shows continued improvement against stronger opponents (ELO rating trajectory gradient continually positive) 
 
 training logs: https://api.wandb.ai/links/critique-labs-ai/im2tdep8
 
@@ -70,3 +70,4 @@ rationale.md contains the running diary of sorts i was keeping while building th
 
 dataset used for SFT: https://huggingface.co/parthh01/chess-llm-tournament
 final model: https://huggingface.co/parthh01/chess-llm-tournament
+training logs: <wanbd report here >
